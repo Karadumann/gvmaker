@@ -12,6 +12,7 @@ A simple and efficient screen recording and GIF creation tool with automatic upl
 - Saves recordings to Desktop
 - Modern UI with easy controls
 - Customizable FPS and quality settings
+- Secure API key management
 
 ## Requirements
 
@@ -37,13 +38,6 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-4. Create a `.env` file in the root directory and add your ImgBB API key:
-```
-IMGBB_API_KEY=your_imgbb_api_key
-```
-
-You can get a free API key from [ImgBB](https://api.imgbb.com/).
-
 ## Usage
 
 1. Run the application:
@@ -51,11 +45,16 @@ You can get a free API key from [ImgBB](https://api.imgbb.com/).
 python main.py
 ```
 
-2. Select recording format (Video/GIF), FPS, and quality settings
-3. Click "Start Recording"
-4. Select the screen region you want to record
-5. Click "Stop Recording" when done
-6. The recording will be:
+2. On first run, you'll be asked to enter your ImgBB API key
+   - You can get a free API key from [ImgBB](https://api.imgbb.com/)
+   - The API key will be securely stored in AppData/Local/ScreenRecorder
+   - You can change the API key anytime from Settings menu
+
+3. Select recording format (Video/GIF), FPS, and quality settings
+4. Click "Start Recording"
+5. Select the screen region you want to record
+6. Click "Stop Recording" when done
+7. The recording will be:
    - Saved to "Screen Recordings" folder on your Desktop
    - Automatically uploaded to ImgBB
    - URL will be copied to your clipboard

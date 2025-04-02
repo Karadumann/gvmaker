@@ -1,22 +1,39 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, simpledialog
 from screen_recorder import ScreenRecorder
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 from uploader import MediaUploader
 import threading
 import time
 import webbrowser
 import pyperclip
 
-# Load environment variables
-load_dotenv()
+class APIKeyDialog(simpledialog.Dialog):
+    def body(self, master):
+        ttk.Label(master, text="Please enter your ImgBB API key:").grid(row=0, pady=5)
+        ttk.Label(master, text="(Get it from https://api.imgbb.com/)").grid(row=1, pady=5)
+        
+        self.api_key = ttk.Entry(master, width=50)
+        self.api_key.grid(row=2, pady=10, padx=5)
+        
+        # Create a button to open ImgBB website
+        ttk.Button(master, text="Get API Key", 
+                  command=lambda: webbrowser.open("https://api.imgbb.com/")).grid(row=3, pady=5)
+        
+        return self.api_key
+        
+    def apply(self):
+        self.result = self.api_key.get()
 
 class ScreenRecorderApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Screen Recorder")
         self.root.geometry("500x350")
+        
+        # Check and get API key
+        self.check_api_key()
         
         # Initialize components
         self.screen_recorder = ScreenRecorder()
@@ -25,7 +42,61 @@ class ScreenRecorderApp:
         
         self.setup_ui()
         
+    def check_api_key(self):
+        """Check if API key exists, if not ask for it"""
+        # Get the path to the user's AppData/Local folder
+        app_data = os.path.join(os.getenv('LOCALAPPDATA'), 'ScreenRecorder')
+        self.config_file = os.path.join(app_data, 'config.env')
+        
+        # Create directory if it doesn't exist
+        if not os.path.exists(app_data):
+            os.makedirs(app_data)
+            
+        # Load existing config
+        load_dotenv(self.config_file)
+        
+        # Check if API key exists
+        if not os.getenv('IMGBB_API_KEY'):
+            # Show dialog to get API key
+            dialog = APIKeyDialog(self.root)
+            api_key = dialog.result
+            
+            if api_key:
+                # Save API key to config file
+                with open(self.config_file, 'w') as f:
+                    f.write(f'IMGBB_API_KEY={api_key}')
+                os.environ['IMGBB_API_KEY'] = api_key
+            else:
+                # If user cancels, exit application
+                self.root.destroy()
+                exit()
+                
+    def setup_menu(self):
+        """Setup menu bar"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # Settings menu
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Change API Key", command=self.change_api_key)
+        
+    def change_api_key(self):
+        """Show dialog to change API key"""
+        dialog = APIKeyDialog(self.root)
+        api_key = dialog.result
+        
+        if api_key:
+            # Save new API key
+            with open(self.config_file, 'w') as f:
+                f.write(f'IMGBB_API_KEY={api_key}')
+            os.environ['IMGBB_API_KEY'] = api_key
+            self.status_label.config(text="API key updated successfully!")
+        
     def setup_ui(self):
+        # Setup menu
+        self.setup_menu()
+        
         # Format selection
         format_frame = ttk.LabelFrame(self.root, text="Format", padding="5")
         format_frame.pack(fill="x", padx=5, pady=5)
