@@ -677,7 +677,7 @@ Created by Berk Karaduman
                 
     def show_settings(self):
         """Show settings dialog"""
-        dialog = SettingsDialog(self.root)
+        dialog = SettingsDialog(self.root, settings=self.settings)
         dialog.transient(self.root)
         dialog.grab_set()
         self.root.wait_window(dialog)
