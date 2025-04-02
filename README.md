@@ -22,7 +22,7 @@ A simple and efficient screen recording and GIF creation tool with automatic upl
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/gvmaker.git
+git clone https://github.com/Karadumann/gvmaker.git
 cd gvmaker
 ```
 
@@ -71,6 +71,14 @@ pyinstaller screen_recorder.spec
 
 The executable will be created in the `dist` folder.
 
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+## Author
+
+- [Berk Karaduman](https://github.com/Karadumann)
+
 ## License
 
-MIT License 
+[MIT](LICENSE) 
