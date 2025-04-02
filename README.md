@@ -6,21 +6,19 @@ A simple and efficient screen recording and GIF creation tool with automatic upl
 
 - Screen region selection with visual guide
 - Video recording (MP4)
-- GIF creation
-- Automatic upload to ImgBB
+- GIF creation with optimized performance
+- Automatic GIF upload to ImgBB
 - Automatic URL copying
 - Saves recordings to Desktop
-- Modern UI with easy controls
+- Modern dark theme UI
 - Customizable FPS and quality settings
 - Secure API key management
-- Mouse click visualization
-- Cursor highlight overlay
-- Recording timer with start delay and auto-stop
-- Pause/Resume recording functionality
-- Recent recordings and uploads history
-- Customizable keyboard shortcuts
-- Dark theme interface
-- Settings persistence
+- Recording timer with start delay
+- Pause/Resume recording (F9)
+- Recent recordings history
+- Recent uploads history with clickable links
+- Keyboard shortcuts (F8 for start/stop)
+- Multi-threaded processing for better performance
 
 ## Requirements
 
@@ -58,25 +56,37 @@ python main.py
    - The API key will be securely stored in AppData/Local/ScreenRecorder
    - You can change the API key anytime from Settings menu
 
-3. Select recording format (Video/GIF), FPS, and quality settings
-4. Click "Start Recording" or press F8
-5. Select the screen region you want to record
-6. Use F9 to pause/resume recording
-7. Click "Stop Recording" or press F8 again when done
-8. The recording will be:
-   - Saved to "Screen Recordings" folder on your Desktop
-   - Automatically uploaded to ImgBB
-   - URL will be copied to your clipboard
+3. Select recording format:
+   - Video (MP4): High-quality video recording
+   - GIF: Optimized GIF with automatic upload
 
-## Settings
+4. Configure settings:
+   - FPS: 5-60 FPS options
+   - Quality: Low/Medium/High
+   - Start delay (optional)
 
-The application includes various customizable settings:
+5. Click "Start Recording" or press F8
+6. Select the screen region you want to record
+7. Use F9 to pause/resume recording
+8. Click "Stop Recording" or press F8 again when done
 
-- Keyboard shortcuts (default: F8 for start/stop, F9 for pause/resume)
-- Mouse visualization options (click indicators and cursor highlight)
-- Recording timer settings (start delay and auto-stop)
-- Output settings (save location and filename prefix)
-- All settings are automatically saved and persisted between sessions
+For GIF recordings:
+- File will be saved to Desktop
+- Automatically uploaded to ImgBB
+- URL will be copied to clipboard
+- Link will appear in Recent Uploads
+
+For Video recordings:
+- File will be saved to Desktop
+- Can be accessed from Recent Recordings list
+
+## Performance Features
+
+- Multi-threaded frame processing
+- Optimized GIF creation
+- Parallel frame conversion
+- Memory-efficient operations
+- Configurable quality settings
 
 ## Building Executable
 
