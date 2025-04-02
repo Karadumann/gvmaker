@@ -7,11 +7,14 @@ import os
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk
+import mss
+import queue
+import threading
 
 class ScreenRecorder:
     def __init__(self):
         self.recording = False
-        self.frames = []
+        self.frame_queue = queue.Queue(maxsize=300)  # Limit queue size to prevent memory issues
         # Get user's Desktop folder
         self.base_dir = os.path.join(os.path.expanduser("~"), "Desktop")
         self.output_dir = os.path.join(self.base_dir, "Screen Recordings")
@@ -60,7 +63,8 @@ class ScreenRecorder:
                 # Ensure coordinates are in correct order
                 x1, x2 = min(start_x, end_x), max(start_x, end_x)
                 y1, y2 = min(start_y, end_y), max(start_y, end_y)
-                root.selected_region = {"x": x1, "y": y1, "width": x2-x1, "height": y2-y1}
+                # Add 1 pixel to ensure proper capture
+                root.selected_region = {"left": x1, "top": y1, "width": x2-x1+1, "height": y2-y1+1}
                 root.quit()
                 
         # Bind mouse events
@@ -93,7 +97,6 @@ class ScreenRecorder:
             return
             
         self.recording = True
-        self.frames = []
         self.format_type = format_type
         self.fps = fps
         self.quality = quality
@@ -107,41 +110,106 @@ class ScreenRecorder:
                 
         self.selected_region = region
         
-        # Start recording in a separate thread
-        import threading
-        self.recording_thread = threading.Thread(target=self._record)
-        self.recording_thread.start()
+        # Start recording and processing threads
+        self.capture_thread = threading.Thread(target=self._capture_frames)
+        self.process_thread = threading.Thread(target=self._process_frames)
         
-    def _record(self):
-        """Internal recording function"""
-        while self.recording:
-            # Capture the screen
-            screenshot = ImageGrab.grab(bbox=(
-                self.selected_region["x"],
-                self.selected_region["y"],
-                self.selected_region["x"] + self.selected_region["width"],
-                self.selected_region["y"] + self.selected_region["height"]
-            ))
+        self.capture_thread.start()
+        self.process_thread.start()
+        
+    def _capture_frames(self):
+        """Capture frames in a separate thread"""
+        # Create a new mss instance for this thread
+        with mss.mss() as sct:
+            frame_time = 1 / self.fps
+            next_frame_time = time.time()
             
-            # Convert to numpy array
-            frame = np.array(screenshot)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            while self.recording:
+                current_time = time.time()
+                
+                # Only capture if it's time for the next frame
+                if current_time >= next_frame_time:
+                    try:
+                        # Capture frame using mss
+                        frame = np.array(sct.grab(self.selected_region))
+                        
+                        if frame is not None and frame.size > 0:
+                            # Convert BGRA to BGR
+                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                            
+                            # Add to queue if not full
+                            try:
+                                if not self.frame_queue.full():
+                                    self.frame_queue.put(frame)
+                                else:
+                                    # If queue is full, wait a bit
+                                    time.sleep(0.001)
+                            except:
+                                print("Error adding frame to queue")
+                                
+                        # Calculate next frame time
+                        next_frame_time = current_time + frame_time
+                    except Exception as e:
+                        print(f"Error capturing frame: {str(e)}")
+                        continue
+                        
+                # Small sleep to prevent high CPU usage
+                time.sleep(0.001)
             
-            # Add frame to list
-            self.frames.append(frame)
-            
-            # Control frame rate
-            time.sleep(1/self.fps)
-            
+    def _process_frames(self):
+        """Process frames in a separate thread"""
+        self.processed_frames = []
+        frame_count = 0
+        last_frame = None
+        
+        while self.recording or not self.frame_queue.empty():
+            try:
+                # Get frame from queue with timeout
+                frame = self.frame_queue.get(timeout=0.1)
+                
+                if frame is not None and frame.size > 0:
+                    # Apply quality settings
+                    try:
+                        if self.quality == "medium":
+                            frame = cv2.resize(frame, None, fx=0.75, fy=0.75)
+                        elif self.quality == "low":
+                            frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
+                            
+                        self.processed_frames.append(frame)
+                        last_frame = frame
+                        frame_count += 1
+                    except Exception as e:
+                        print(f"Error processing frame: {str(e)}")
+                        if last_frame is not None:
+                            self.processed_frames.append(last_frame)
+                            frame_count += 1
+                            
+            except queue.Empty:
+                if self.recording:  # Only continue if still recording
+                    continue
+                else:
+                    break  # Stop if recording is done and queue is empty
+                    
+        print(f"Processed {frame_count} frames")  # Debug info
+                
     def stop_recording(self):
         """Stop recording and save the file"""
         if not self.recording:
             return None
             
+        print("Stopping recording...")  # Debug info
         self.recording = False
-        self.recording_thread.join()
         
-        if not self.frames:
+        # Wait for threads to finish
+        print("Waiting for capture thread...")  # Debug info
+        self.capture_thread.join()
+        print("Waiting for process thread...")  # Debug info
+        self.process_thread.join()
+        
+        print(f"Total frames captured: {len(self.processed_frames)}")  # Debug info
+        
+        if not self.processed_frames:
+            print("No frames were processed!")  # Debug info
             return None
             
         # Generate filename with timestamp
@@ -151,38 +219,83 @@ class ScreenRecorder:
             filename = f"recording_{timestamp}.mp4"
             filepath = os.path.join(self.output_dir, filename)
             
-            # Get frame dimensions
-            height, width = self.frames[0].shape[:2]
-            
-            # Create video writer
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
-            
-            # Write frames
-            for frame in self.frames:
-                out.write(frame)
+            try:
+                # Get frame dimensions
+                height, width = self.processed_frames[0].shape[:2]
                 
-            out.release()
+                # Create video writer with H.264 codec
+                fourcc = cv2.VideoWriter_fourcc(*'avc1')
+                out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
+                
+                if not out.isOpened():
+                    print("Failed to create video writer!")  # Debug info
+                    # Try with different codec
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
+                
+                # Write frames in chunks for better performance
+                chunk_size = 100
+                frames_written = 0
+                for i in range(0, len(self.processed_frames), chunk_size):
+                    chunk = self.processed_frames[i:i + chunk_size]
+                    for frame in chunk:
+                        out.write(frame)
+                        frames_written += 1
+                        
+                print(f"Wrote {frames_written} frames to video")  # Debug info
+                out.release()
+                
+            except Exception as e:
+                print(f"Error saving video: {str(e)}")  # Debug info
+                return None
             
         else:  # GIF
             filename = f"recording_{timestamp}.gif"
             filepath = os.path.join(self.output_dir, filename)
             
-            # Convert frames to PIL Images
-            pil_frames = []
-            for frame in self.frames:
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_frames.append(Image.fromarray(frame_rgb))
+            try:
+                # Convert frames to PIL Images in chunks
+                pil_frames = []
+                chunk_size = 50
+                frames_converted = 0
+                for i in range(0, len(self.processed_frames), chunk_size):
+                    chunk = self.processed_frames[i:i + chunk_size]
+                    for frame in chunk:
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        pil_frames.append(Image.fromarray(frame_rgb))
+                        frames_converted += 1
+                        
+                print(f"Converted {frames_converted} frames to PIL images")  # Debug info
                 
-            # Save as GIF
-            duration = int(1000/self.fps)  # Duration in milliseconds
-            pil_frames[0].save(
-                filepath,
-                save_all=True,
-                append_images=pil_frames[1:],
-                duration=duration,
-                loop=0
-            )
+                # Optimize GIF settings based on quality
+                if self.quality == "high":
+                    optimize = True
+                    quality = 90
+                elif self.quality == "medium":
+                    optimize = True
+                    quality = 70
+                else:  # low
+                    optimize = True
+                    quality = 50
+                    
+                # Save as GIF with optimizations
+                duration = int(1000/self.fps)  # Duration in milliseconds
+                pil_frames[0].save(
+                    filepath,
+                    save_all=True,
+                    append_images=pil_frames[1:],
+                    duration=duration,
+                    loop=0,
+                    optimize=optimize,
+                    quality=quality
+                )
+                
+            except Exception as e:
+                print(f"Error saving GIF: {str(e)}")  # Debug info
+                return None
             
+        # Clear memory
+        self.processed_frames = []
+        
         print(f"Recording saved to: {filepath}")  # Debug print
         return filepath 
