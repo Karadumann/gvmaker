@@ -17,7 +17,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('icon.ico', '.')],
     hiddenimports=[
         'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
         'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
@@ -25,7 +25,7 @@ a = Analysis(
         'uvicorn.lifespan', 'uvicorn.lifespan.on',
         'PIL', 'PIL._tkinter_finder', 'PIL._imaging',
         'pyautogui', 'cv2', 'numpy', 'dotenv', 'requests',
-        'pynput', 'screeninfo'
+        'pynput', 'screeninfo', 'keyboard', 'pynput.keyboard._win32', 'pynput.mouse._win32'
     ],
     hookspath=[],
     hooksconfig={},

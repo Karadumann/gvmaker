@@ -1,5 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, simpledialog
+from tkinter import ttk, simpledialog, messagebox
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 from screen_recorder import ScreenRecorder
 import os
 from dotenv import load_dotenv, set_key
@@ -9,6 +11,10 @@ import time
 import webbrowser
 import pyperclip
 import requests
+import pyautogui
+import keyboard
+from datetime import datetime
+import sys
 
 class APIKeyDialog(simpledialog.Dialog):
     def body(self, master):
@@ -85,74 +91,246 @@ class AboutDialog(simpledialog.Dialog):
 
 class ScreenRecorderApp:
     def __init__(self):
-        self.root = tk.Tk()
+        self.root = ttk.Window(themename="darkly")
         self.root.title("Screen Recorder")
-        self.root.minsize(500, 350)  # Minimum window size
+        self.root.geometry("400x500")
+        self.root.resizable(False, False)
         
-        # Create main frame with scrollbar
-        self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill="both", expand=True)
+        # Set window icon
+        try:
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                application_path = sys._MEIPASS
+            else:
+                # Running as script
+                application_path = os.path.dirname(os.path.abspath(__file__))
+            
+            icon_path = os.path.join(application_path, "icon.ico")
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+        except Exception as e:
+            print(f"Warning: Could not set icon: {str(e)}")
         
-        # Create canvas
-        self.canvas = tk.Canvas(self.main_frame)
-        self.scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.canvas)
+        # Center the window
+        self.center_window()
         
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
+        # Initialize variables
+        self.recorder = ScreenRecorder()
+        self.uploader = MediaUploader()
+        self.recording = False
+        self.uploading = False
         
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        
-        # Pack scrollbar and canvas
-        self.scrollbar.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-        
-        # Add mousewheel scrolling
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-        
-        # Check and get API key
-        self.check_api_key()
-        
-        # Initialize components
-        self.screen_recorder = ScreenRecorder()
-        self.media_uploader = MediaUploader()
-        self.is_recording = False
-        
+        # Setup UI
         self.setup_ui()
         
-    def _on_mousewheel(self, event):
-        """Handle mousewheel scrolling"""
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        # Check API key
+        self.check_api_key()
         
-    def test_api_key(self, api_key):
-        """Test if the API key is valid"""
-        try:
-            # Try to upload a small test image
-            test_payload = {
-                'key': api_key,
-                'image': 'R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='  # 1x1 transparent GIF
-            }
-            response = requests.post('https://api.imgbb.com/1/upload', data=test_payload)
-            return response.status_code == 200 and 'data' in response.json()
-        except:
-            return False
+        # Bind hotkey
+        keyboard.on_press_key("f8", lambda _: self.toggle_recording())
+        
+    def center_window(self):
+        """Center the window on the screen"""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        
+    def setup_ui(self):
+        """Setup the user interface"""
+        # Main container with padding
+        main_frame = ttk.Frame(self.root, padding=20)
+        main_frame.pack(fill=BOTH, expand=YES)
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text="Screen Recorder",
+            font=("Helvetica", 24, "bold"),
+            bootstyle="primary"
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Format selection frame
+        format_frame = ttk.LabelFrame(main_frame, text="Format", padding=10)
+        format_frame.pack(fill=X, pady=(0, 10))
+        
+        self.format_var = tk.StringVar(value="video")
+        ttk.Radiobutton(
+            format_frame,
+            text="Video (MP4)",
+            variable=self.format_var,
+            value="video",
+            command=self.update_fps_options
+        ).pack(anchor=W)
+        ttk.Radiobutton(
+            format_frame,
+            text="GIF",
+            variable=self.format_var,
+            value="gif",
+            command=self.update_fps_options
+        ).pack(anchor=W)
+        
+        # FPS selection frame
+        self.fps_frame = ttk.LabelFrame(main_frame, text="FPS", padding=10)
+        self.fps_frame.pack(fill=X, pady=(0, 10))
+        
+        self.fps_var = tk.StringVar(value="30")
+        fps_options = ["60", "30", "15", "10", "5"]
+        for fps in fps_options:
+            ttk.Radiobutton(
+                self.fps_frame,
+                text=f"{fps} FPS",
+                variable=self.fps_var,
+                value=fps
+            ).pack(anchor=W)
             
-    def update_api_status(self):
-        """Update API status indicator"""
-        api_key = os.getenv('IMGBB_API_KEY')
-        if not api_key:
-            self.api_status_label.config(text="⬤ API Key Missing", foreground="red")
-            return False
-            
-        if self.test_api_key(api_key):
-            self.api_status_label.config(text="⬤ API Key Active", foreground="green")
-            return True
-        else:
-            self.api_status_label.config(text="⬤ API Key Invalid", foreground="red")
-            return False
+        # Quality selection frame
+        quality_frame = ttk.LabelFrame(main_frame, text="Quality", padding=10)
+        quality_frame.pack(fill=X, pady=(0, 10))
+        
+        self.quality_var = tk.StringVar(value="high")
+        ttk.Radiobutton(
+            quality_frame,
+            text="High",
+            variable=self.quality_var,
+            value="high"
+        ).pack(anchor=W)
+        ttk.Radiobutton(
+            quality_frame,
+            text="Medium",
+            variable=self.quality_var,
+            value="medium"
+        ).pack(anchor=W)
+        ttk.Radiobutton(
+            quality_frame,
+            text="Low",
+            variable=self.quality_var,
+            value="low"
+        ).pack(anchor=W)
+        
+        # API Key status frame
+        api_frame = ttk.LabelFrame(main_frame, text="API Key Status", padding=10)
+        api_frame.pack(fill=X, pady=(0, 10))
+        
+        self.api_status_label = ttk.Label(
+            api_frame,
+            text="Checking...",
+            font=("Helvetica", 10)
+        )
+        self.api_status_label.pack(anchor=W)
+        
+        # Record button
+        self.record_button = ttk.Button(
+            main_frame,
+            text="Start Recording (F8)",
+            command=self.toggle_recording,
+            bootstyle="success",
+            width=20
+        )
+        self.record_button.pack(pady=10)
+        
+        # Status label
+        self.status_label = ttk.Label(
+            main_frame,
+            text="Ready",
+            font=("Helvetica", 10)
+        )
+        self.status_label.pack(pady=(0, 10))
+        
+        # Recent recordings frame
+        recordings_frame = ttk.LabelFrame(main_frame, text="Recent Recordings", padding=10)
+        recordings_frame.pack(fill=BOTH, expand=YES)
+        
+        # Create a frame for the listbox and scrollbar
+        list_frame = ttk.Frame(recordings_frame)
+        list_frame.pack(fill=BOTH, expand=YES)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=RIGHT, fill=Y)
+        
+        # Recent recordings listbox
+        self.recordings_listbox = tk.Listbox(
+            list_frame,
+            yscrollcommand=scrollbar.set,
+            selectmode=tk.SINGLE,
+            height=5,
+            font=("Helvetica", 9)
+        )
+        self.recordings_listbox.pack(side=LEFT, fill=BOTH, expand=YES)
+        scrollbar.config(command=self.recordings_listbox.yview)
+        
+        # Bind double-click event
+        self.recordings_listbox.bind('<Double-Button-1>', self.open_recording)
+        
+        # Update recordings list
+        self.update_recordings_list()
+        
+        # URL frame for showing share links
+        self.url_frame = ttk.Frame(main_frame)
+        self.url_label = ttk.Label(
+            self.url_frame,
+            text="",
+            font=("Helvetica", 9),
+            foreground="blue",
+            cursor="hand2"
+        )
+        self.url_label.pack(side=LEFT, fill=X, expand=YES)
+        self.url_label.bind("<Button-1>", lambda e: webbrowser.open(self.current_url))
+        
+        # Copy URL button
+        self.copy_button = ttk.Button(
+            self.url_frame,
+            text="Copy URL",
+            command=self.copy_url,
+            width=10
+        )
+        
+        # Setup menu
+        self.setup_menu()
+        
+    def setup_menu(self):
+        """Setup the application menu"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Open Recordings Folder", command=self.open_recordings_folder)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        
+        # Settings menu
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Change API Key", command=self.change_api_key)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+        
+    def show_about(self):
+        """Show about dialog"""
+        about_text = """Screen Recorder v1.0
+        
+A simple screen recording tool that can capture your screen as video or GIF.
+
+Features:
+• Record screen as MP4 or GIF
+• Adjustable FPS and quality
+• Automatic ImgBB upload
+• Hotkey support (F8)
+• Modern dark theme
+
+Created by Berk Karaduman
+© 2025"""
+        
+        messagebox.showinfo("About", about_text)
         
     def check_api_key(self):
         """Check if API key exists, if not ask for it"""
@@ -183,21 +361,6 @@ class ScreenRecorderApp:
                 self.root.destroy()
                 exit()
                 
-    def setup_menu(self):
-        """Setup menu bar"""
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-        
-        # Settings menu
-        settings_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Settings", menu=settings_menu)
-        settings_menu.add_command(label="Change API Key", command=self.change_api_key)
-        
-        # Help menu
-        help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(label="About", command=self.show_about)
-        
     def change_api_key(self):
         """Show dialog to change API key"""
         dialog = APIKeyDialog(self.root)
@@ -210,103 +373,50 @@ class ScreenRecorderApp:
             os.environ['IMGBB_API_KEY'] = api_key
             self.update_api_status()  # Update status after changing key
             
-    def show_about(self):
-        """Show about dialog"""
-        AboutDialog(self.root)
+    def update_api_status(self):
+        """Update API status indicator"""
+        api_key = os.getenv('IMGBB_API_KEY')
+        if not api_key:
+            self.api_status_label.config(text="⬤ API Key Missing", foreground="red")
+            return False
+            
+        if self.test_api_key(api_key):
+            self.api_status_label.config(text="⬤ API Key Active", foreground="green")
+            return True
+        else:
+            self.api_status_label.config(text="⬤ API Key Invalid", foreground="red")
+            return False
         
-    def setup_ui(self):
-        # Setup menu
-        self.setup_menu()
-        
-        # API Status indicator
-        self.api_status_label = ttk.Label(self.scrollable_frame, text="⬤ Checking API...", foreground="gray")
-        self.api_status_label.pack(pady=5)
-        
-        # Format selection
-        format_frame = ttk.LabelFrame(self.scrollable_frame, text="Format", padding="5")
-        format_frame.pack(fill="x", padx=5, pady=5)
-        
-        self.format_var = tk.StringVar(value="video")
-        ttk.Radiobutton(format_frame, text="Video", variable=self.format_var, value="video").pack(side="left", padx=5)
-        ttk.Radiobutton(format_frame, text="GIF", variable=self.format_var, value="gif").pack(side="left", padx=5)
-        
-        # FPS selection
-        fps_frame = ttk.LabelFrame(self.scrollable_frame, text="FPS", padding="5")
-        fps_frame.pack(fill="x", padx=5, pady=5)
-        
-        self.fps_var = tk.StringVar(value="30")
-        ttk.Entry(fps_frame, textvariable=self.fps_var, width=10).pack(side="left", padx=5)
-        ttk.Label(fps_frame, text="(default: 30)").pack(side="left", padx=5)
-        
-        # Quality selection
-        quality_frame = ttk.LabelFrame(self.scrollable_frame, text="Quality", padding="5")
-        quality_frame.pack(fill="x", padx=5, pady=5)
-        
-        self.quality_var = tk.StringVar(value="high")
-        ttk.Radiobutton(quality_frame, text="High", variable=self.quality_var, value="high").pack(side="left", padx=5)
-        ttk.Radiobutton(quality_frame, text="Medium", variable=self.quality_var, value="medium").pack(side="left", padx=5)
-        ttk.Radiobutton(quality_frame, text="Low", variable=self.quality_var, value="low").pack(side="left", padx=5)
-        
-        # Record button
-        self.record_button = ttk.Button(self.scrollable_frame, text="Start Recording", command=self.toggle_recording)
-        self.record_button.pack(pady=20)
-        
-        # Status label
-        self.status_label = ttk.Label(self.scrollable_frame, text="Ready to record")
-        self.status_label.pack(pady=10)
-        
-        # File path frame (created but hidden initially)
-        self.file_path_frame = ttk.Frame(self.scrollable_frame)
-        self.file_path_label = ttk.Label(
-            self.file_path_frame, 
-            text="", 
-            foreground="blue", 
-            cursor="hand2"
-        )
-        self.file_path_label.pack(side="left", padx=5)
-        self.file_path_label.bind("<Button-1>", self.open_file_location)
-        
-        self.open_folder_button = ttk.Button(
-            self.file_path_frame,
-            text="Open Folder",
-            command=self.open_recordings_folder
-        )
-        self.open_folder_button.pack(side="left", padx=5)
-        
-        # URL frame
-        self.url_frame = ttk.Frame(self.scrollable_frame)
-        
-        # URL label
-        self.url_label = ttk.Label(self.url_frame, text="", foreground="blue", cursor="hand2")
-        self.url_label.pack(side="left", padx=5)
-        self.url_label.bind("<Button-1>", self.open_url)
-        
-        # Copy button
-        self.copy_button = ttk.Button(self.url_frame, text="Copy URL", command=self.copy_url)
-        self.copy_button.pack(side="left", padx=5)
-        
-        # Hide frames initially
-        self.file_path_frame.pack_forget()
-        self.url_frame.pack_forget()
-        
+    def test_api_key(self, api_key):
+        """Test if the API key is valid"""
+        try:
+            # Try to upload a small test image
+            test_payload = {
+                'key': api_key,
+                'image': 'R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='  # 1x1 transparent GIF
+            }
+            response = requests.post('https://api.imgbb.com/1/upload', data=test_payload)
+            return response.status_code == 200 and 'data' in response.json()
+        except:
+            return False
+            
     def toggle_recording(self):
-        if not self.is_recording:
+        if not self.recording:
             self.start_recording()
         else:
             self.stop_recording()
             
     def start_recording(self):
-        self.is_recording = True
+        self.recording = True
         self.record_button.config(text="Stop Recording")
         self.status_label.config(text="Select area to record...")
-        self.file_path_frame.pack_forget()  # Hide file path frame when starting new recording
         
         # Start recording in a separate thread
         threading.Thread(target=self.record_screen).start()
         
     def record_screen(self):
         try:
-            self.screen_recorder.start_recording(
+            self.recorder.start_recording(
                 format_type=self.format_var.get(),
                 fps=int(self.fps_var.get()),
                 quality=self.quality_var.get()
@@ -314,23 +424,23 @@ class ScreenRecorderApp:
             self.status_label.config(text="Recording in progress...")
         except Exception as e:
             self.status_label.config(text=f"Error: {str(e)}")
-            self.is_recording = False
+            self.recording = False
             self.record_button.config(text="Start Recording")
             
     def stop_recording(self):
-        self.is_recording = False
+        self.recording = False
         self.record_button.config(text="Start Recording")
         self.status_label.config(text="Stopping recording...")
         
         try:
-            file_path = self.screen_recorder.stop_recording()
+            file_path = self.recorder.stop_recording()
             if file_path:
                 # Show file path as clickable link
                 self.show_file_path(file_path)
                 
                 # Upload the file
                 self.status_label.config(text="Uploading recording...")
-                share_url = self.media_uploader.get_share_url(file_path)
+                share_url = self.uploader.get_share_url(file_path)
                 
                 if share_url and not share_url.startswith("Error"):
                     self.show_url(share_url)
@@ -346,18 +456,14 @@ class ScreenRecorderApp:
     def show_file_path(self, file_path):
         """Show file path as clickable link"""
         self.current_file_path = file_path
-        self.file_path_label.config(text=f"Click to open: {file_path}")
-        self.file_path_frame.pack(fill="x", padx=5, pady=5)
+        self.recordings_listbox.insert(tk.END, file_path)
         
-        # Ensure the new content is visible
-        self.canvas.update_idletasks()
-        self.canvas.yview_moveto(1.0)  # Scroll to bottom
-        
-    def open_file_location(self, event=None):
-        """Open the file location in explorer"""
-        if hasattr(self, 'current_file_path') and os.path.exists(self.current_file_path):
-            # Open file in explorer and select it
-            os.system(f'explorer /select,"{self.current_file_path}"')
+    def open_recording(self, event):
+        """Open the selected recording"""
+        selected_index = self.recordings_listbox.curselection()
+        if selected_index:
+            file_path = self.recordings_listbox.get(selected_index)
+            self.show_file_path(file_path)
             
     def open_recordings_folder(self):
         """Open the recordings folder in explorer"""
@@ -368,16 +474,25 @@ class ScreenRecorderApp:
     def show_url(self, url):
         """Show URL and copy button"""
         self.current_url = url
-        self.url_label.config(text=f"Click to open: {url}")
-        self.url_frame.pack(fill="x", padx=5, pady=5)
-        self.copy_button.pack(side="left", padx=5)
-        # Auto copy URL
-        self.copy_url()
+        
+        # Show URL frame if not already visible
+        if not self.url_frame.winfo_ismapped():
+            self.url_frame.pack(fill="x", padx=5, pady=5)
             
-    def open_url(self, event):
-        """Open URL in default browser"""
-        if hasattr(self, 'current_url'):
-            webbrowser.open(self.current_url)
+        # Update URL label with clickable link
+        self.url_label.config(
+            text=f"Click to open: {url}",
+            foreground="light blue",
+            cursor="hand2"
+        )
+        self.url_label.pack(side="left", fill="x", expand=True)
+        
+        # Show copy button
+        self.copy_button.pack(side="right", padx=5)
+        
+        # Auto copy URL to clipboard
+        self.copy_url()
+        self.status_label.config(text="URL copied to clipboard! Click the link to open in browser.")
             
     def copy_url(self):
         """Copy URL to clipboard"""
@@ -385,6 +500,27 @@ class ScreenRecorderApp:
             pyperclip.copy(self.current_url)
             self.status_label.config(text="URL copied to clipboard!")
             
+    def update_fps_options(self):
+        """Update FPS options based on format selection"""
+        if self.format_var.get() == "video":
+            self.fps_frame.pack(fill=X, pady=(0, 10))
+        else:
+            self.fps_frame.pack_forget()
+            
+    def update_recordings_list(self):
+        """Update the list of recent recordings"""
+        # Clear current list
+        self.recordings_listbox.delete(0, tk.END)
+        
+        # Get desktop path
+        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        
+        # Look for recordings in desktop
+        for file in os.listdir(desktop):
+            if file.endswith(('.mp4', '.gif')):
+                file_path = os.path.join(desktop, file)
+                self.recordings_listbox.insert(tk.END, file_path)
+                
     def run(self):
         # Check API status when starting
         self.root.after(1000, self.update_api_status)  # Check after 1 second
