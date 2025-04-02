@@ -10,6 +10,7 @@ from tkinter import ttk
 import mss
 import queue
 import threading
+import imageio
 
 class ScreenRecorder:
     def __init__(self):
@@ -223,8 +224,8 @@ class ScreenRecorder:
                 # Get frame dimensions
                 height, width = self.processed_frames[0].shape[:2]
                 
-                # Create video writer with H.264 codec
-                fourcc = cv2.VideoWriter_fourcc(*'avc1')
+                # Create video writer with FFmpeg codec
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                 out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
                 
                 if not out.isOpened():
@@ -299,3 +300,13 @@ class ScreenRecorder:
         
         print(f"Recording saved to: {filepath}")  # Debug print
         return filepath 
+
+    def pause(self):
+        """Pause recording"""
+        self.recording = False
+        
+    def resume(self):
+        """Resume recording"""
+        self.recording = True
+        self.capture_thread = threading.Thread(target=self._capture_frames)
+        self.capture_thread.start() 

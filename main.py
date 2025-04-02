@@ -15,6 +15,12 @@ import pyautogui
 import keyboard
 from datetime import datetime
 import sys
+from settings import Settings
+from settings_dialog import SettingsDialog
+import cv2
+import numpy as np
+import imageio
+from PIL import Image
 
 class APIKeyDialog(simpledialog.Dialog):
     def body(self, master):
@@ -118,16 +124,26 @@ class ScreenRecorderApp:
         self.recorder = ScreenRecorder()
         self.uploader = MediaUploader()
         self.recording = False
-        self.uploading = False
+        self.paused = False
+        self.frames = []
+        self.start_time = None
+        self.record_thread = None
+        
+        # Initialize settings
+        self.settings = Settings()
+        
+        # Initialize timer
+        self.timer_active = False
+        self.timer_thread = None
         
         # Setup UI
         self.setup_ui()
         
+        # Setup hotkeys
+        self.setup_hotkeys()
+        
         # Check API key
         self.check_api_key()
-        
-        # Bind hotkey
-        keyboard.on_press_key("f8", lambda _: self.toggle_recording())
         
     def center_window(self):
         """Center the window on the screen"""
@@ -143,6 +159,19 @@ class ScreenRecorderApp:
         # Main container with padding
         main_frame = ttk.Frame(self.root, padding=20)
         main_frame.pack(fill=BOTH, expand=YES)
+        
+        # Timer frame at top left
+        timer_frame = ttk.Frame(main_frame)
+        timer_frame.pack(anchor=NW, pady=(0, 10))
+        
+        # Timer label
+        self.timer_label = ttk.Label(
+            timer_frame,
+            text="00:00:00",
+            font=("Helvetica", 12, "bold"),
+            bootstyle="primary"
+        )
+        self.timer_label.pack(side=LEFT, padx=5)
         
         # Title
         title_label = ttk.Label(
@@ -232,6 +261,17 @@ class ScreenRecorderApp:
         )
         self.record_button.pack(pady=10)
         
+        # Pause button
+        self.pause_button = ttk.Button(
+            main_frame,
+            text="Pause (F9)",
+            command=self.toggle_pause,
+            state=tk.DISABLED,
+            bootstyle="secondary",
+            width=20
+        )
+        self.pause_button.pack(pady=10)
+        
         # Status label
         self.status_label = ttk.Label(
             main_frame,
@@ -244,12 +284,12 @@ class ScreenRecorderApp:
         lists_frame = ttk.Frame(main_frame)
         lists_frame.pack(fill=BOTH, expand=YES)
         
-        # Recent uploads frame
-        uploads_frame = ttk.LabelFrame(lists_frame, text="Recent Uploads", padding=10)
-        uploads_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
+        # Recent uploads/recordings frame
+        self.uploads_frame = ttk.LabelFrame(lists_frame, text="Recent Uploads", padding=10)
+        self.uploads_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
         
         # Create a frame for the uploads listbox and scrollbar
-        uploads_list_frame = ttk.Frame(uploads_frame)
+        uploads_list_frame = ttk.Frame(self.uploads_frame)
         uploads_list_frame.pack(fill=BOTH, expand=YES)
         
         # Add scrollbar for uploads
@@ -262,7 +302,9 @@ class ScreenRecorderApp:
             yscrollcommand=uploads_scrollbar.set,
             selectmode=tk.SINGLE,
             height=6,
-            font=("Helvetica", 9)
+            font=("Helvetica", 9),
+            foreground="blue",
+            cursor="hand2"
         )
         self.uploads_listbox.pack(side=LEFT, fill=BOTH, expand=YES)
         uploads_scrollbar.config(command=self.uploads_listbox.yview)
@@ -271,11 +313,11 @@ class ScreenRecorderApp:
         self.uploads_listbox.bind('<Double-Button-1>', self.open_url)
         
         # Recent recordings frame
-        recordings_frame = ttk.LabelFrame(lists_frame, text="Recent Recordings", padding=10)
-        recordings_frame.pack(fill=BOTH, expand=YES)
+        self.recordings_frame = ttk.LabelFrame(lists_frame, text="Recent Recordings", padding=10)
+        self.recordings_frame.pack(fill=BOTH, expand=YES)
         
         # Create a frame for the recordings listbox and scrollbar
-        list_frame = ttk.Frame(recordings_frame)
+        list_frame = ttk.Frame(self.recordings_frame)
         list_frame.pack(fill=BOTH, expand=YES)
         
         # Add scrollbar
@@ -322,6 +364,15 @@ class ScreenRecorderApp:
         # Setup menu
         self.setup_menu()
         
+        # Initial format selection update
+        self.update_format_selection()
+        
+    def setup_hotkeys(self):
+        """Setup keyboard shortcuts"""
+        shortcuts = self.settings.settings["shortcuts"]
+        keyboard.add_hotkey(shortcuts["start_stop"], self.toggle_recording)
+        keyboard.add_hotkey(shortcuts["pause"], self.toggle_pause)
+        
     def setup_menu(self):
         """Setup the application menu"""
         menubar = tk.Menu(self.root)
@@ -337,6 +388,7 @@ class ScreenRecorderApp:
         # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences", command=self.show_settings)
         settings_menu.add_command(label="Change API Key", command=self.change_api_key)
         
         # Help menu
@@ -430,45 +482,83 @@ Created by Berk Karaduman
         except:
             return False
             
+    def update_timer(self):
+        """Update timer display"""
+        if self.timer_active and not self.paused:
+            elapsed = int(time.time() - self.start_time)
+            hours = elapsed // 3600
+            minutes = (elapsed % 3600) // 60
+            seconds = elapsed % 60
+            self.timer_label.config(text=f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+            
+            # Check if we should stop recording based on timer settings
+            timer_settings = self.settings.get_timer_settings()
+            if timer_settings["enabled"] and timer_settings["stop_after"] > 0:
+                if elapsed >= timer_settings["stop_after"]:
+                    self.stop_recording()
+                    
+        self.root.after(1000, self.update_timer)  # Update every second
+        
+    def start_timer(self):
+        """Start the timer"""
+        self.timer_active = True
+        self.start_time = time.time()
+        self.update_timer()
+        
+    def stop_timer(self):
+        """Stop the timer"""
+        self.timer_active = False
+        self.timer_label.config(text="00:00:00")
+        
     def toggle_recording(self):
+        """Toggle recording state"""
         if not self.recording:
             self.start_recording()
         else:
             self.stop_recording()
             
     def start_recording(self):
-        self.recording = True
-        self.record_button.config(text="Stop Recording")
-        self.status_label.config(text="Select area to record...")
-        
-        # Start recording in a separate thread
-        threading.Thread(target=self.record_screen).start()
-        
-    def record_screen(self):
+        """Start recording"""
+        # Check timer settings
+        timer_settings = self.settings.get_timer_settings()
+        if timer_settings["enabled"] and timer_settings["start_delay"] > 0:
+            # Start countdown
+            self.status_label.config(text=f"Starting in {timer_settings['start_delay']} seconds...")
+            self.root.after(timer_settings["start_delay"] * 1000, self._start_recording_impl)
+        else:
+            self._start_recording_impl()
+            
+    def _start_recording_impl(self):
+        """Actual recording start implementation"""
         try:
             self.recorder.start_recording(
                 format_type=self.format_var.get(),
                 fps=int(self.fps_var.get()),
                 quality=self.quality_var.get()
             )
+            
+            self.recording = True
+            self.record_button.config(text="Stop Recording")
             self.status_label.config(text="Recording in progress...")
+            self.start_timer()  # Start timer when recording begins
         except Exception as e:
             self.status_label.config(text=f"Error: {str(e)}")
             self.recording = False
             self.record_button.config(text="Start Recording")
             
     def stop_recording(self):
+        """Stop recording and save"""
         self.recording = False
         self.record_button.config(text="Start Recording")
         self.status_label.config(text="Stopping recording...")
+        self.stop_timer()  # Stop timer when recording ends
         
         try:
+            # Stop video recording
             file_path = self.recorder.stop_recording()
             if file_path:
-                # Show file path as clickable link
+                # Show file path and upload
                 self.show_file_path(file_path)
-                
-                # Upload the file
                 self.status_label.config(text="Uploading recording...")
                 share_url = self.uploader.get_share_url(file_path)
                 
@@ -529,7 +619,7 @@ Created by Berk Karaduman
         # Show copy button
         self.copy_button.pack(side="right", padx=5)
         
-        # Add URL to recent uploads list
+        # Add URL to recent uploads list with clickable style
         self.uploads_listbox.insert(0, url)  # Add at the top of the list
         if self.uploads_listbox.size() > 10:  # Keep only last 10 uploads
             self.uploads_listbox.delete(10, tk.END)
@@ -548,8 +638,19 @@ Created by Berk Karaduman
         """Update FPS options based on format selection"""
         if self.format_var.get() == "video":
             self.fps_frame.pack(fill=X, pady=(0, 10))
+            self.update_format_selection()
         else:
             self.fps_frame.pack_forget()
+            self.update_format_selection()
+            
+    def update_format_selection(self):
+        """Update UI based on format selection"""
+        if self.format_var.get() == "video":
+            self.uploads_frame.pack_forget()
+            self.recordings_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
+        else:
+            self.recordings_frame.pack_forget()
+            self.uploads_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
             
     def update_recordings_list(self):
         """Update the list of recent recordings"""
@@ -565,6 +666,29 @@ Created by Berk Karaduman
                 file_path = os.path.join(desktop, file)
                 self.recordings_listbox.insert(tk.END, file_path)
                 
+    def show_settings(self):
+        """Show settings dialog"""
+        dialog = SettingsDialog(self.root)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        self.root.wait_window(dialog)
+        
+        # Reload settings
+        self.settings.load_settings()
+        self.setup_hotkeys()
+        
+    def toggle_pause(self):
+        """Toggle pause state"""
+        if self.recording:
+            if self.paused:
+                self.recorder.resume_recording()
+                self.paused = False
+                self.status_label.config(text="Recording in progress...")
+            else:
+                self.recorder.pause_recording()
+                self.paused = True
+                self.status_label.config(text="Recording paused")
+            
     def run(self):
         # Check API status when starting
         self.root.after(1000, self.update_api_status)  # Check after 1 second
