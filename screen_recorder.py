@@ -19,6 +19,7 @@ class ScreenRecorder:
         self.base_dir = os.path.join(os.path.expanduser("~"), "Desktop")
         self.output_dir = os.path.join(self.base_dir, "Screen Recordings")
         self.selected_region = None
+        self.overlay_window = None
         
         # Create recordings directory if it doesn't exist
         if not os.path.exists(self.output_dir):
@@ -91,6 +92,33 @@ class ScreenRecorder:
         
         return root.selected_region
         
+    def create_overlay_window(self):
+        """Create a semi-transparent overlay window to show recording area"""
+        if self.overlay_window:
+            self.overlay_window.destroy()
+            
+        self.overlay_window = tk.Tk()
+        self.overlay_window.attributes('-alpha', 0.3)  # Semi-transparent
+        self.overlay_window.attributes('-topmost', True)  # Always on top
+        self.overlay_window.overrideredirect(True)  # No window decorations
+        
+        # Set window size and position
+        self.overlay_window.geometry(f"{self.selected_region['width']}x{self.selected_region['height']}+{self.selected_region['left']}+{self.selected_region['top']}")
+        
+        # Create canvas with red border
+        canvas = tk.Canvas(self.overlay_window, highlightthickness=2, highlightbackground='red')
+        canvas.pack(fill="both", expand=True)
+        
+        # Add recording indicator text
+        canvas.create_text(
+            self.selected_region['width']/2, 20,
+            text="Recording in progress...",
+            fill="red",
+            font=("Arial", 12, "bold")
+        )
+        
+        return self.overlay_window
+        
     def start_recording(self, region=None, format_type="video", fps=30, quality="high"):
         """Start screen recording"""
         if self.recording:
@@ -109,6 +137,9 @@ class ScreenRecorder:
                 raise Exception("No region selected")
                 
         self.selected_region = region
+        
+        # Create and show overlay window
+        self.overlay_window = self.create_overlay_window()
         
         # Start recording and processing threads
         self.capture_thread = threading.Thread(target=self._capture_frames)
@@ -199,6 +230,11 @@ class ScreenRecorder:
             
         print("Stopping recording...")  # Debug info
         self.recording = False
+        
+        # Close overlay window
+        if self.overlay_window:
+            self.overlay_window.destroy()
+            self.overlay_window = None
         
         # Wait for threads to finish
         print("Waiting for capture thread...")  # Debug info
