@@ -213,17 +213,65 @@ class ScreenRecorderApp:
         try:
             file_path = self.screen_recorder.stop_recording()
             if file_path:
+                # Show file path as clickable link
+                self.show_file_path(file_path)
+                
                 # Upload the file
+                self.status_label.config(text="Uploading recording...")
                 share_url = self.media_uploader.get_share_url(file_path)
+                
                 if share_url and not share_url.startswith("Error"):
-                    self.status_label.config(text=f"Recording saved to: {file_path}")
                     self.show_url(share_url)
+                    self.status_label.config(text="Recording saved and uploaded successfully!")
                 else:
-                    self.status_label.config(text=f"Recording saved to: {file_path} (upload failed)")
+                    error_msg = share_url if share_url else "Unknown upload error"
+                    self.status_label.config(text=f"Upload failed: {error_msg}")
             else:
                 self.status_label.config(text="Error: No recording found")
         except Exception as e:
             self.status_label.config(text=f"Error: {str(e)}")
+            
+    def show_file_path(self, file_path):
+        """Show file path as clickable link"""
+        # Create file path frame if not exists
+        if not hasattr(self, 'file_path_frame'):
+            self.file_path_frame = ttk.Frame(self.root)
+            self.file_path_frame.pack(fill="x", padx=5, pady=5)
+            
+            # File path label
+            self.file_path_label = ttk.Label(
+                self.file_path_frame, 
+                text="", 
+                foreground="blue", 
+                cursor="hand2"
+            )
+            self.file_path_label.pack(side="left", padx=5)
+            self.file_path_label.bind("<Button-1>", self.open_file_location)
+            
+            # Open folder button
+            self.open_folder_button = ttk.Button(
+                self.file_path_frame,
+                text="Open Folder",
+                command=self.open_recordings_folder
+            )
+            self.open_folder_button.pack(side="left", padx=5)
+        
+        # Update file path and show frame
+        self.current_file_path = file_path
+        self.file_path_label.config(text=f"Click to open: {file_path}")
+        self.file_path_frame.pack(fill="x", padx=5, pady=5)
+        
+    def open_file_location(self, event=None):
+        """Open the file location in explorer"""
+        if hasattr(self, 'current_file_path') and os.path.exists(self.current_file_path):
+            # Open file in explorer and select it
+            os.system(f'explorer /select,"{self.current_file_path}"')
+            
+    def open_recordings_folder(self):
+        """Open the recordings folder in explorer"""
+        folder_path = os.path.dirname(self.current_file_path)
+        if os.path.exists(folder_path):
+            os.startfile(folder_path)
             
     def show_url(self, url):
         """Show URL and copy button"""
