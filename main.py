@@ -93,7 +93,7 @@ class ScreenRecorderApp:
     def __init__(self):
         self.root = ttk.Window(themename="darkly")
         self.root.title("Screen Recorder")
-        self.root.geometry("400x500")
+        self.root.geometry("400x750")
         self.root.resizable(False, False)
         
         # Set window icon
@@ -240,11 +240,41 @@ class ScreenRecorderApp:
         )
         self.status_label.pack(pady=(0, 10))
         
+        # Lists container frame
+        lists_frame = ttk.Frame(main_frame)
+        lists_frame.pack(fill=BOTH, expand=YES)
+        
+        # Recent uploads frame
+        uploads_frame = ttk.LabelFrame(lists_frame, text="Recent Uploads", padding=10)
+        uploads_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
+        
+        # Create a frame for the uploads listbox and scrollbar
+        uploads_list_frame = ttk.Frame(uploads_frame)
+        uploads_list_frame.pack(fill=BOTH, expand=YES)
+        
+        # Add scrollbar for uploads
+        uploads_scrollbar = ttk.Scrollbar(uploads_list_frame)
+        uploads_scrollbar.pack(side=RIGHT, fill=Y)
+        
+        # Recent uploads listbox
+        self.uploads_listbox = tk.Listbox(
+            uploads_list_frame,
+            yscrollcommand=uploads_scrollbar.set,
+            selectmode=tk.SINGLE,
+            height=6,
+            font=("Helvetica", 9)
+        )
+        self.uploads_listbox.pack(side=LEFT, fill=BOTH, expand=YES)
+        uploads_scrollbar.config(command=self.uploads_listbox.yview)
+        
+        # Bind double-click event for uploads
+        self.uploads_listbox.bind('<Double-Button-1>', self.open_url)
+        
         # Recent recordings frame
-        recordings_frame = ttk.LabelFrame(main_frame, text="Recent Recordings", padding=10)
+        recordings_frame = ttk.LabelFrame(lists_frame, text="Recent Recordings", padding=10)
         recordings_frame.pack(fill=BOTH, expand=YES)
         
-        # Create a frame for the listbox and scrollbar
+        # Create a frame for the recordings listbox and scrollbar
         list_frame = ttk.Frame(recordings_frame)
         list_frame.pack(fill=BOTH, expand=YES)
         
@@ -257,13 +287,13 @@ class ScreenRecorderApp:
             list_frame,
             yscrollcommand=scrollbar.set,
             selectmode=tk.SINGLE,
-            height=5,
+            height=6,
             font=("Helvetica", 9)
         )
         self.recordings_listbox.pack(side=LEFT, fill=BOTH, expand=YES)
         scrollbar.config(command=self.recordings_listbox.yview)
         
-        # Bind double-click event
+        # Bind double-click event for recordings
         self.recordings_listbox.bind('<Double-Button-1>', self.open_recording)
         
         # Update recordings list
@@ -458,12 +488,21 @@ Created by Berk Karaduman
         self.current_file_path = file_path
         self.recordings_listbox.insert(tk.END, file_path)
         
-    def open_recording(self, event):
-        """Open the selected recording"""
+    def open_recording(self, event=None):
+        """Open the selected recording's location"""
         selected_index = self.recordings_listbox.curselection()
         if selected_index:
             file_path = self.recordings_listbox.get(selected_index)
-            self.show_file_path(file_path)
+            if os.path.exists(file_path):
+                # Open file location in explorer and select the file
+                os.system(f'explorer /select,"{file_path}"')
+                
+    def open_url(self, event=None):
+        """Open the selected URL in browser"""
+        selected_index = self.uploads_listbox.curselection()
+        if selected_index:
+            url = self.uploads_listbox.get(selected_index)
+            webbrowser.open(url)
             
     def open_recordings_folder(self):
         """Open the recordings folder in explorer"""
@@ -489,6 +528,11 @@ Created by Berk Karaduman
         
         # Show copy button
         self.copy_button.pack(side="right", padx=5)
+        
+        # Add URL to recent uploads list
+        self.uploads_listbox.insert(0, url)  # Add at the top of the list
+        if self.uploads_listbox.size() > 10:  # Keep only last 10 uploads
+            self.uploads_listbox.delete(10, tk.END)
         
         # Auto copy URL to clipboard
         self.copy_url()
