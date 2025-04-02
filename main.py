@@ -8,6 +8,7 @@ import threading
 import time
 import webbrowser
 import pyperclip
+import requests
 
 class APIKeyDialog(simpledialog.Dialog):
     def body(self, master):
@@ -41,6 +42,33 @@ class ScreenRecorderApp:
         self.is_recording = False
         
         self.setup_ui()
+        
+    def test_api_key(self, api_key):
+        """Test if the API key is valid"""
+        try:
+            # Try to upload a small test image
+            test_payload = {
+                'key': api_key,
+                'image': 'R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='  # 1x1 transparent GIF
+            }
+            response = requests.post('https://api.imgbb.com/1/upload', data=test_payload)
+            return response.status_code == 200 and 'data' in response.json()
+        except:
+            return False
+            
+    def update_api_status(self):
+        """Update API status indicator"""
+        api_key = os.getenv('IMGBB_API_KEY')
+        if not api_key:
+            self.api_status_label.config(text="⬤ API Key Missing", foreground="red")
+            return False
+            
+        if self.test_api_key(api_key):
+            self.api_status_label.config(text="⬤ API Key Active", foreground="green")
+            return True
+        else:
+            self.api_status_label.config(text="⬤ API Key Invalid", foreground="red")
+            return False
         
     def check_api_key(self):
         """Check if API key exists, if not ask for it"""
@@ -91,11 +119,15 @@ class ScreenRecorderApp:
             with open(self.config_file, 'w') as f:
                 f.write(f'IMGBB_API_KEY={api_key}')
             os.environ['IMGBB_API_KEY'] = api_key
-            self.status_label.config(text="API key updated successfully!")
-        
+            self.update_api_status()  # Update status after changing key
+            
     def setup_ui(self):
         # Setup menu
         self.setup_menu()
+        
+        # API Status indicator
+        self.api_status_label = ttk.Label(self.root, text="⬤ Checking API...", foreground="gray")
+        self.api_status_label.pack(pady=5)
         
         # Format selection
         format_frame = ttk.LabelFrame(self.root, text="Format", padding="5")
@@ -214,6 +246,8 @@ class ScreenRecorderApp:
             self.status_label.config(text="URL copied to clipboard!")
             
     def run(self):
+        # Check API status when starting
+        self.root.after(1000, self.update_api_status)  # Check after 1 second
         self.root.mainloop()
 
 if __name__ == "__main__":
