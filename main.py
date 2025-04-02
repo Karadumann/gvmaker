@@ -50,7 +50,7 @@ class AboutDialog(simpledialog.Dialog):
         title.pack(pady=5)
         
         # Version
-        version = ttk.Label(info_frame, text="Version 1.0.0")
+        version = ttk.Label(info_frame, text="Version 1.1.0")
         version.pack()
         
         # Description
