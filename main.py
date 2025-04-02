@@ -27,6 +27,62 @@ class APIKeyDialog(simpledialog.Dialog):
     def apply(self):
         self.result = self.api_key.get()
 
+class AboutDialog(simpledialog.Dialog):
+    def body(self, master):
+        # App info
+        info_frame = ttk.Frame(master)
+        info_frame.pack(fill="x", padx=20, pady=10)
+        
+        # Title
+        title = ttk.Label(info_frame, text="Screen Recorder", font=("Helvetica", 14, "bold"))
+        title.pack(pady=5)
+        
+        # Version
+        version = ttk.Label(info_frame, text="Version 1.0.0")
+        version.pack()
+        
+        # Description
+        desc = """A simple and efficient screen recorder that allows you to:
+• Record screen areas as Video or GIF
+• Adjust FPS and quality settings
+• Save recordings to Desktop
+• Share recordings via ImgBB
+• Easy-to-use interface"""
+        
+        description = ttk.Label(info_frame, text=desc, justify="left", wraplength=300)
+        description.pack(pady=10)
+        
+        # Developer info
+        dev_info = ttk.Label(info_frame, text="Developed by Berk Karaduman")
+        dev_info.pack()
+        
+        # GitHub link
+        github_frame = ttk.Frame(info_frame)
+        github_frame.pack(pady=5)
+        
+        github_label = ttk.Label(github_frame, text="GitHub: ")
+        github_label.pack(side="left")
+        
+        github_link = ttk.Label(
+            github_frame, 
+            text="github.com/Karadumann/gvmaker",
+            foreground="blue",
+            cursor="hand2"
+        )
+        github_link.pack(side="left")
+        github_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/berkkaraduman/gvmaker"))
+        
+        return info_frame
+        
+    def buttonbox(self):
+        # Add only OK button
+        box = ttk.Frame(self)
+        ok_button = ttk.Button(box, text="OK", width=10, command=self.ok, default="active")
+        ok_button.pack(padx=5, pady=5)
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+        box.pack()
+
 class ScreenRecorderApp:
     def __init__(self):
         self.root = tk.Tk()
@@ -137,6 +193,11 @@ class ScreenRecorderApp:
         menubar.add_cascade(label="Settings", menu=settings_menu)
         settings_menu.add_command(label="Change API Key", command=self.change_api_key)
         
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+        
     def change_api_key(self):
         """Show dialog to change API key"""
         dialog = APIKeyDialog(self.root)
@@ -149,6 +210,10 @@ class ScreenRecorderApp:
             os.environ['IMGBB_API_KEY'] = api_key
             self.update_api_status()  # Update status after changing key
             
+    def show_about(self):
+        """Show about dialog"""
+        AboutDialog(self.root)
+        
     def setup_ui(self):
         # Setup menu
         self.setup_menu()
