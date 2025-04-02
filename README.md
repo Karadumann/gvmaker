@@ -13,6 +13,14 @@ A simple and efficient screen recording and GIF creation tool with automatic upl
 - Modern UI with easy controls
 - Customizable FPS and quality settings
 - Secure API key management
+- Mouse click visualization
+- Cursor highlight overlay
+- Recording timer with start delay and auto-stop
+- Pause/Resume recording functionality
+- Recent recordings and uploads history
+- Customizable keyboard shortcuts
+- Dark theme interface
+- Settings persistence
 
 ## Requirements
 
@@ -51,13 +59,24 @@ python main.py
    - You can change the API key anytime from Settings menu
 
 3. Select recording format (Video/GIF), FPS, and quality settings
-4. Click "Start Recording"
+4. Click "Start Recording" or press F8
 5. Select the screen region you want to record
-6. Click "Stop Recording" when done
-7. The recording will be:
+6. Use F9 to pause/resume recording
+7. Click "Stop Recording" or press F8 again when done
+8. The recording will be:
    - Saved to "Screen Recordings" folder on your Desktop
    - Automatically uploaded to ImgBB
    - URL will be copied to your clipboard
+
+## Settings
+
+The application includes various customizable settings:
+
+- Keyboard shortcuts (default: F8 for start/stop, F9 for pause/resume)
+- Mouse visualization options (click indicators and cursor highlight)
+- Recording timer settings (start delay and auto-stop)
+- Output settings (save location and filename prefix)
+- All settings are automatically saved and persisted between sessions
 
 ## Building Executable
 
