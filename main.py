@@ -31,7 +31,31 @@ class ScreenRecorderApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Screen Recorder")
-        self.root.geometry("500x350")
+        self.root.minsize(500, 350)  # Minimum window size
+        
+        # Create main frame with scrollbar
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill="both", expand=True)
+        
+        # Create canvas
+        self.canvas = tk.Canvas(self.main_frame)
+        self.scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # Pack scrollbar and canvas
+        self.scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        
+        # Add mousewheel scrolling
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
         
         # Check and get API key
         self.check_api_key()
@@ -42,6 +66,10 @@ class ScreenRecorderApp:
         self.is_recording = False
         
         self.setup_ui()
+        
+    def _on_mousewheel(self, event):
+        """Handle mousewheel scrolling"""
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
     def test_api_key(self, api_key):
         """Test if the API key is valid"""
@@ -126,11 +154,11 @@ class ScreenRecorderApp:
         self.setup_menu()
         
         # API Status indicator
-        self.api_status_label = ttk.Label(self.root, text="⬤ Checking API...", foreground="gray")
+        self.api_status_label = ttk.Label(self.scrollable_frame, text="⬤ Checking API...", foreground="gray")
         self.api_status_label.pack(pady=5)
         
         # Format selection
-        format_frame = ttk.LabelFrame(self.root, text="Format", padding="5")
+        format_frame = ttk.LabelFrame(self.scrollable_frame, text="Format", padding="5")
         format_frame.pack(fill="x", padx=5, pady=5)
         
         self.format_var = tk.StringVar(value="video")
@@ -138,7 +166,7 @@ class ScreenRecorderApp:
         ttk.Radiobutton(format_frame, text="GIF", variable=self.format_var, value="gif").pack(side="left", padx=5)
         
         # FPS selection
-        fps_frame = ttk.LabelFrame(self.root, text="FPS", padding="5")
+        fps_frame = ttk.LabelFrame(self.scrollable_frame, text="FPS", padding="5")
         fps_frame.pack(fill="x", padx=5, pady=5)
         
         self.fps_var = tk.StringVar(value="30")
@@ -146,7 +174,7 @@ class ScreenRecorderApp:
         ttk.Label(fps_frame, text="(default: 30)").pack(side="left", padx=5)
         
         # Quality selection
-        quality_frame = ttk.LabelFrame(self.root, text="Quality", padding="5")
+        quality_frame = ttk.LabelFrame(self.scrollable_frame, text="Quality", padding="5")
         quality_frame.pack(fill="x", padx=5, pady=5)
         
         self.quality_var = tk.StringVar(value="high")
@@ -155,26 +183,45 @@ class ScreenRecorderApp:
         ttk.Radiobutton(quality_frame, text="Low", variable=self.quality_var, value="low").pack(side="left", padx=5)
         
         # Record button
-        self.record_button = ttk.Button(self.root, text="Start Recording", command=self.toggle_recording)
+        self.record_button = ttk.Button(self.scrollable_frame, text="Start Recording", command=self.toggle_recording)
         self.record_button.pack(pady=20)
         
         # Status label
-        self.status_label = ttk.Label(self.root, text="Ready to record")
+        self.status_label = ttk.Label(self.scrollable_frame, text="Ready to record")
         self.status_label.pack(pady=10)
         
-        # URL frame
-        self.url_frame = ttk.Frame(self.root)
-        self.url_frame.pack(fill="x", padx=5, pady=5)
+        # File path frame (created but hidden initially)
+        self.file_path_frame = ttk.Frame(self.scrollable_frame)
+        self.file_path_label = ttk.Label(
+            self.file_path_frame, 
+            text="", 
+            foreground="blue", 
+            cursor="hand2"
+        )
+        self.file_path_label.pack(side="left", padx=5)
+        self.file_path_label.bind("<Button-1>", self.open_file_location)
         
-        # URL label (hidden initially)
+        self.open_folder_button = ttk.Button(
+            self.file_path_frame,
+            text="Open Folder",
+            command=self.open_recordings_folder
+        )
+        self.open_folder_button.pack(side="left", padx=5)
+        
+        # URL frame
+        self.url_frame = ttk.Frame(self.scrollable_frame)
+        
+        # URL label
         self.url_label = ttk.Label(self.url_frame, text="", foreground="blue", cursor="hand2")
         self.url_label.pack(side="left", padx=5)
         self.url_label.bind("<Button-1>", self.open_url)
         
-        # Copy button (hidden initially)
+        # Copy button
         self.copy_button = ttk.Button(self.url_frame, text="Copy URL", command=self.copy_url)
+        self.copy_button.pack(side="left", padx=5)
         
-        # Hide URL frame initially
+        # Hide frames initially
+        self.file_path_frame.pack_forget()
         self.url_frame.pack_forget()
         
     def toggle_recording(self):
@@ -187,7 +234,7 @@ class ScreenRecorderApp:
         self.is_recording = True
         self.record_button.config(text="Stop Recording")
         self.status_label.config(text="Select area to record...")
-        self.url_frame.pack_forget()  # Hide URL frame when starting new recording
+        self.file_path_frame.pack_forget()  # Hide file path frame when starting new recording
         
         # Start recording in a separate thread
         threading.Thread(target=self.record_screen).start()
@@ -233,33 +280,13 @@ class ScreenRecorderApp:
             
     def show_file_path(self, file_path):
         """Show file path as clickable link"""
-        # Create file path frame if not exists
-        if not hasattr(self, 'file_path_frame'):
-            self.file_path_frame = ttk.Frame(self.root)
-            self.file_path_frame.pack(fill="x", padx=5, pady=5)
-            
-            # File path label
-            self.file_path_label = ttk.Label(
-                self.file_path_frame, 
-                text="", 
-                foreground="blue", 
-                cursor="hand2"
-            )
-            self.file_path_label.pack(side="left", padx=5)
-            self.file_path_label.bind("<Button-1>", self.open_file_location)
-            
-            # Open folder button
-            self.open_folder_button = ttk.Button(
-                self.file_path_frame,
-                text="Open Folder",
-                command=self.open_recordings_folder
-            )
-            self.open_folder_button.pack(side="left", padx=5)
-        
-        # Update file path and show frame
         self.current_file_path = file_path
         self.file_path_label.config(text=f"Click to open: {file_path}")
         self.file_path_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Ensure the new content is visible
+        self.canvas.update_idletasks()
+        self.canvas.yview_moveto(1.0)  # Scroll to bottom
         
     def open_file_location(self, event=None):
         """Open the file location in explorer"""
