@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, simpledialog, messagebox
+from tkinter import ttk, simpledialog, messagebox, BOTH
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from screen_recorder import ScreenRecorder
@@ -350,7 +350,7 @@ class ScreenRecorderApp:
             foreground="blue",
             cursor="hand2"
         )
-        self.url_label.pack(side=LEFT, fill=X, expand=YES)
+        self.url_label.pack(side=ttk.LEFT, fill=ttk.X, expand=ttk.YES)
         self.url_label.bind("<Button-1>", lambda e: webbrowser.open(self.current_url))
         
         # Copy URL button
@@ -428,7 +428,8 @@ Created by Berk Karaduman
         load_dotenv(self.config_file)
         
         # Check if API key exists
-        if not os.getenv('IMGBB_API_KEY'):
+        api_key = os.getenv('IMGBB_API_KEY')
+        if not api_key:
             # Show dialog to get API key
             dialog = APIKeyDialog(self.root)
             api_key = dialog.result
@@ -438,11 +439,14 @@ Created by Berk Karaduman
                 with open(self.config_file, 'w') as f:
                     f.write(f'IMGBB_API_KEY={api_key}')
                 os.environ['IMGBB_API_KEY'] = api_key
+                print(f"API Key saved to: {self.config_file}")  # Debug print
             else:
                 # If user cancels, exit application
                 self.root.destroy()
                 exit()
-                
+        else:
+            print(f"API Key loaded from: {self.config_file}")  # Debug print
+            
     def change_api_key(self):
         """Show dialog to change API key"""
         dialog = APIKeyDialog(self.root)
@@ -559,15 +563,20 @@ Created by Berk Karaduman
             if file_path:
                 # Show file path and upload
                 self.show_file_path(file_path)
-                self.status_label.config(text="Uploading recording...")
-                share_url = self.uploader.get_share_url(file_path)
                 
-                if share_url and not share_url.startswith("Error"):
-                    self.show_url(share_url)
-                    self.status_label.config(text="Recording saved and uploaded successfully!")
+                # Only attempt upload for GIF files
+                if self.format_var.get() == "gif":
+                    self.status_label.config(text="Uploading recording...")
+                    share_url = self.uploader.get_share_url(file_path)
+                    
+                    if share_url and not share_url.startswith("Error"):
+                        self.show_url(share_url)
+                        self.status_label.config(text="Recording saved and uploaded successfully!")
+                    else:
+                        error_msg = share_url if share_url else "Unknown upload error"
+                        self.status_label.config(text=f"Upload failed: {error_msg}")
                 else:
-                    error_msg = share_url if share_url else "Unknown upload error"
-                    self.status_label.config(text=f"Upload failed: {error_msg}")
+                    self.status_label.config(text="Recording saved successfully! (Video files are not uploaded)")
             else:
                 self.status_label.config(text="Error: No recording found")
         except Exception as e:
@@ -614,7 +623,7 @@ Created by Berk Karaduman
             foreground="light blue",
             cursor="hand2"
         )
-        self.url_label.pack(side="left", fill="x", expand=True)
+        self.url_label.pack(side=ttk.LEFT, fill=ttk.X, expand=ttk.YES)
         
         # Show copy button
         self.copy_button.pack(side="right", padx=5)
@@ -647,7 +656,7 @@ Created by Berk Karaduman
         """Update UI based on format selection"""
         if self.format_var.get() == "video":
             self.uploads_frame.pack_forget()
-            self.recordings_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))
+            self.recordings_frame.pack(fill=BOTH, expand=ttk.YES, pady=(0, 10))
         else:
             self.recordings_frame.pack_forget()
             self.uploads_frame.pack(fill=BOTH, expand=YES, pady=(0, 10))

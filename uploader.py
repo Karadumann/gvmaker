@@ -39,6 +39,7 @@ class MediaUploader:
                 
                 print(f"Uploading file: {file_path}")  # Debug print
                 print(f"File size: {file_size / 1024 / 1024:.1f}MB")  # Debug print
+                print(f"API Key present: {'Yes' if self.imgbb_api_key else 'No'}")  # Debug print
                 
                 response = requests.post(self.upload_url, data=payload)
                 
@@ -81,8 +82,8 @@ class MediaUploader:
             
         # Check file extension
         _, ext = os.path.splitext(file_path)
-        if ext.lower() not in ['.jpg', '.jpeg', '.png', '.gif']:
-            return f"Error: File type {ext} not supported. Only JPG, PNG, and GIF files are allowed."
+        if ext.lower() not in ['.gif']:  # Only allow GIF files
+            return f"Error: File type {ext} not supported. Only GIF files are allowed."
             
         result = self.upload_file(file_path)
         
