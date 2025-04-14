@@ -87,6 +87,7 @@ For Video recordings:
 - Parallel frame conversion
 - Memory-efficient operations
 - Configurable quality settings
+- Automatic memory cleanup for long recordings
 
 ## Building Executable
 
