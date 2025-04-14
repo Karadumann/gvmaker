@@ -17,7 +17,7 @@ class ScreenRecorder:
     def __init__(self):
         self.recording = False
         # Increase queue size for better performance
-        self.frame_queue = queue.Queue(maxsize=1000)  # Increased from 300 to 1000
+        self.frame_queue = queue.Queue(maxsize=2000)  # Increased from 1000 to 2000
         # Get user's Desktop folder
         self.base_dir = os.path.join(os.path.expanduser("~"), "Desktop")
         self.output_dir = os.path.join(self.base_dir, "Screen Recordings")
@@ -27,8 +27,10 @@ class ScreenRecorder:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             
-        # Initialize thread pool for parallel processing
-        self.thread_pool = ThreadPoolExecutor(max_workers=4)
+        self.thread_pool = ThreadPoolExecutor(max_workers=8)  # Increased from 4 to 8
+        
+        # Initialize mss instance for better performance
+        self.sct = mss.mss()
         
     def select_region(self):
         """Open a window to select screen region"""
@@ -120,42 +122,40 @@ class ScreenRecorder:
         
     def _capture_frames(self):
         """Capture frames in a separate thread"""
-        # Create a new mss instance for this thread
-        with mss.mss() as sct:
-            frame_time = 1 / self.fps
-            next_frame_time = time.time()
+        frame_time = 1 / self.fps
+        next_frame_time = time.time()
+        
+        while self.recording:
+            current_time = time.time()
             
-            while self.recording:
-                current_time = time.time()
-                
-                # Only capture if it's time for the next frame
-                if current_time >= next_frame_time:
-                    try:
-                        # Capture frame using mss
-                        frame = np.array(sct.grab(self.selected_region))
+            # Only capture if it's time for the next frame
+            if current_time >= next_frame_time:
+                try:
+                    # Capture frame using mss with optimized settings
+                    frame = np.array(self.sct.grab(self.selected_region))
+                    
+                    if frame is not None and frame.size > 0:
+                        # Convert BGRA to BGR using optimized method
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR, dst=frame)
                         
-                        if frame is not None and frame.size > 0:
-                            # Convert BGRA to BGR
-                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                        # Add to queue if not full
+                        try:
+                            if not self.frame_queue.full():
+                                self.frame_queue.put(frame)
+                            else:
+                                # If queue is full, skip frame instead of waiting
+                                pass
+                        except:
+                            print("Error adding frame to queue")
                             
-                            # Add to queue if not full
-                            try:
-                                if not self.frame_queue.full():
-                                    self.frame_queue.put(frame)
-                                else:
-                                    # If queue is full, wait a bit
-                                    time.sleep(0.001)
-                            except:
-                                print("Error adding frame to queue")
-                                
-                        # Calculate next frame time
-                        next_frame_time = current_time + frame_time
-                    except Exception as e:
-                        print(f"Error capturing frame: {str(e)}")
-                        continue
-                        
-                # Small sleep to prevent high CPU usage
-                time.sleep(0.001)
+                    # Calculate next frame time
+                    next_frame_time = current_time + frame_time
+                except Exception as e:
+                    print(f"Error capturing frame: {str(e)}")
+                    continue
+                    
+            # Small sleep to prevent high CPU usage
+            time.sleep(0.0005)  # Reduced sleep time
             
     def process_frame_chunk(self, chunk, quality):
         """Process a chunk of frames in parallel"""
@@ -177,18 +177,18 @@ class ScreenRecorder:
         self.processed_frames = []
         frame_count = 0
         chunk = []
-        chunk_size = 50  # Process 50 frames at a time
+        chunk_size = 100  # Increased from 50 to 100
         
         while self.recording or not self.frame_queue.empty():
             try:
-                # Get frame from queue with timeout
-                frame = self.frame_queue.get(timeout=0.1)
+                # Get frame from queue with shorter timeout
+                frame = self.frame_queue.get(timeout=0.05)  # Reduced timeout
                 chunk.append(frame)
                 
                 # Process chunk when it reaches the desired size
                 if len(chunk) >= chunk_size:
-                    # Split chunk into sub-chunks for parallel processing
-                    sub_chunks = [chunk[i:i + 10] for i in range(0, len(chunk), 10)]
+                    # Split chunk into larger sub-chunks for better parallel processing
+                    sub_chunks = [chunk[i:i + 20] for i in range(0, len(chunk), 20)]  # Increased from 10 to 20
                     futures = []
                     
                     # Submit sub-chunks for parallel processing
