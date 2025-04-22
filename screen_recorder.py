@@ -12,24 +12,22 @@ import queue
 import threading
 import imageio
 from concurrent.futures import ThreadPoolExecutor
-import psutil
 
 class ScreenRecorder:
     def __init__(self):
         self.recording = False
-        available_memory = psutil.virtual_memory().available
-        queue_size = min(2000, int(available_memory / (1024 * 1024 * 10)))
-        self.frame_queue = queue.Queue(maxsize=queue_size)
+        self.frame_queue = queue.Queue(maxsize=1000)
         self.base_dir = os.path.join(os.path.expanduser("~"), "Desktop")
         self.output_dir = os.path.join(self.base_dir, "Screen Recordings")
         self.selected_region = None
+        self.processed_frames = []
+        self.frames = []
         
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             
         cpu_count = os.cpu_count() or 4
         self.thread_pool = ThreadPoolExecutor(max_workers=max(4, cpu_count * 2))
-        self.sct = mss.mss()
         self.frame_cache = {}
         self.cache_size = 100
         
@@ -92,6 +90,8 @@ class ScreenRecorder:
         self.format_type = format_type
         self.fps = fps
         self.quality = quality
+        self.frames = []  # Reset frames at start
+        self.processed_frames = []  # Reset processed frames at start
         
         if not region:
             region = self.select_region()
@@ -106,91 +106,110 @@ class ScreenRecorder:
         self.process_thread.start()
         
     def _capture_frames(self):
+        print("Starting frame capture...")
         frame_time = 1 / self.fps
         next_frame_time = time.time()
+        frames_captured = 0
         
-        while self.recording:
-            current_time = time.time()
-            
-            if current_time >= next_frame_time:
-                try:
-                    frame = np.array(self.sct.grab(self.selected_region))
-                    
-                    if frame is not None and frame.size > 0:
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR, dst=frame)
+        # Create a new mss instance within this thread
+        with mss.mss() as sct:
+            while self.recording:
+                current_time = time.time()
+                
+                if current_time >= next_frame_time:
+                    try:
+                        frame = np.array(sct.grab(self.selected_region))
                         
-                        try:
-                            if not self.frame_queue.full():
-                                self.frame_queue.put(frame)
-                        except:
-                            print("Error adding frame to queue")
+                        if frame is not None and frame.size > 0:
+                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                            frames_captured += 1
+                            print(f"Captured frame {frames_captured}")
                             
-                    next_frame_time = current_time + frame_time
-                except Exception as e:
-                    print(f"Error capturing frame: {str(e)}")
-                    continue
-                    
-            time.sleep(0.0005)
+                            try:
+                                self.frame_queue.put(frame, timeout=0.1)
+                            except queue.Full:
+                                print("Frame queue is full, dropping frame")
+                            except Exception as e:
+                                print(f"Error adding frame to queue: {str(e)}")
+                                
+                        next_frame_time = current_time + frame_time
+                    except Exception as e:
+                        print(f"Error capturing frame: {str(e)}")
+                        continue
+                        
+                time.sleep(0.001)  # Reduced sleep time for better performance
             
+        print(f"Frame capture stopped. Total frames captured: {frames_captured}")
+        
     def process_frame_chunk(self, chunk, quality):
         processed_frames = []
         for frame in chunk:
             if frame is None:
                 continue
                 
-            frame_key = hash(frame.tobytes())
-            if frame_key in self.frame_cache:
-                processed_frames.append(self.frame_cache[frame_key])
+            try:
+                if quality == "low":
+                    frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
+                elif quality == "medium":
+                    frame = cv2.resize(frame, None, fx=0.75, fy=0.75)
+                    
+                processed_frames.append(frame)
+            except Exception as e:
+                print(f"Error processing frame in chunk: {str(e)}")
                 continue
                 
-            if quality == "low":
-                frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-            elif quality == "medium":
-                frame = cv2.resize(frame, None, fx=0.75, fy=0.75)
-                
-            if len(self.frame_cache) >= self.cache_size:
-                oldest_key = next(iter(self.frame_cache))
-                del self.frame_cache[oldest_key]
-            self.frame_cache[frame_key] = frame
-            
-            processed_frames.append(frame)
-            
         return processed_frames
 
     def _process_frames(self):
+        print("Starting frame processing...")
         chunk_size = 10
         current_chunk = []
+        self.processed_frames = []
+        frames_processed = 0
         
         while self.recording or not self.frame_queue.empty():
             try:
                 frame = self.frame_queue.get(timeout=1)
-                current_chunk.append(frame)
+                if frame is not None:
+                    current_chunk.append(frame)
+                    frames_processed += 1
+                    print(f"Processing frame {frames_processed}")
                 
-                if len(current_chunk) >= chunk_size or self.frame_queue.empty():
+                if len(current_chunk) >= chunk_size or (not self.recording and current_chunk):
                     processed_chunk = self.process_frame_chunk(current_chunk, self.quality)
-                    
-                    for frame in processed_chunk:
-                        if frame is not None:
-                            self.frames.append(frame)
-                            
+                    self.processed_frames.extend(processed_chunk)
                     current_chunk = []
                     
             except queue.Empty:
+                if not self.recording and current_chunk:
+                    processed_chunk = self.process_frame_chunk(current_chunk, self.quality)
+                    self.processed_frames.extend(processed_chunk)
+                    current_chunk = []
                 continue
             except Exception as e:
                 print(f"Frame processing error: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
+                
+        print(f"Frame processing stopped. Total frames processed: {frames_processed}")
+        print(f"Total frames in processed_frames: {len(self.processed_frames)}")
 
     def stop_recording(self):
         if not self.recording:
+            print("Not currently recording!")
             return None
             
         print("Stopping recording...")
         self.recording = False
         
-        self.capture_thread.join()
-        self.process_thread.join()
+        # Wait for threads to finish
+        if hasattr(self, 'capture_thread'):
+            self.capture_thread.join()
+        if hasattr(self, 'process_thread'):
+            self.process_thread.join()
         
+        print(f"Number of processed frames: {len(self.processed_frames)}")
         if not self.processed_frames:
             print("No frames were processed!")
             return None
@@ -207,14 +226,12 @@ class ScreenRecorder:
                 out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
                 
                 if not out.isOpened():
-                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                    out = cv2.VideoWriter(filepath, fourcc, self.fps, (width, height))
+                    print("Failed to open video writer!")
+                    return None
                 
-                chunk_size = 200
                 frames_written = 0
-                for i in range(0, len(self.processed_frames), chunk_size):
-                    chunk = self.processed_frames[i:i + chunk_size]
-                    for frame in chunk:
+                for frame in self.processed_frames:
+                    if frame is not None:
                         out.write(frame)
                         frames_written += 1
                         
@@ -225,69 +242,55 @@ class ScreenRecorder:
                 print(f"Error saving video: {str(e)}")
                 return None
             
-        else:
+        else:  # GIF
             filename = f"recording_{timestamp}.gif"
             filepath = os.path.join(self.output_dir, filename)
             
             try:
-                total_frames = len(self.processed_frames)
-                pil_frames = [None] * total_frames
+                print("Converting frames to GIF format...")
+                pil_frames = []
                 
-                def convert_frame_optimized(args):
-                    idx, frame = args
-                    if self.quality == "medium":
-                        frame = cv2.resize(frame, None, fx=0.75, fy=0.75)
-                    elif self.quality == "low":
-                        frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-                    
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    img = Image.fromarray(frame_rgb)
-                    
-                    if self.quality == "low":
-                        img = img.quantize(colors=64)
-                    elif self.quality == "medium":
-                        img = img.quantize(colors=128)
-                    else:
-                        img = img.quantize(colors=256)
-                    
-                    return idx, img
+                for frame in self.processed_frames:
+                    if frame is not None:
+                        # Convert BGR to RGB
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        img = Image.fromarray(frame_rgb)
+                        
+                        # Apply quality settings
+                        if self.quality == "low":
+                            img = img.quantize(colors=64)
+                        elif self.quality == "medium":
+                            img = img.quantize(colors=128)
+                        else:
+                            img = img.quantize(colors=256)
+                        
+                        pil_frames.append(img)
                 
-                frame_data = list(enumerate(self.processed_frames))
-                results = list(self.thread_pool.map(convert_frame_optimized, frame_data))
+                print(f"Converted {len(pil_frames)} frames to GIF format")
                 
-                for idx, img in results:
-                    pil_frames[idx] = img
+                if not pil_frames:
+                    print("No frames to save!")
+                    return None
                 
-                print(f"Converted {len(pil_frames)} frames to optimized GIF format")
+                # Save GIF with appropriate settings
+                duration = max(20, int(1000/self.fps))  # Minimum 20ms between frames
                 
-                if self.quality == "high":
-                    optimize = True
-                    quality = 90
-                elif self.quality == "medium":
-                    optimize = True
-                    quality = 70
-                else:
-                    optimize = True
-                    quality = 50
-                
-                duration = max(20, int(1000/self.fps))
-                
+                print(f"Saving GIF with {len(pil_frames)} frames...")
                 pil_frames[0].save(
                     filepath,
                     save_all=True,
                     append_images=pil_frames[1:],
                     duration=duration,
                     loop=0,
-                    optimize=optimize,
-                    quality=quality
+                    optimize=True
                 )
                 
             except Exception as e:
                 print(f"Error saving GIF: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return None
             
-        self.processed_frames = []
-        
         print(f"Recording saved to: {filepath}")
         return filepath
 
