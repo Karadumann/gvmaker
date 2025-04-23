@@ -12,6 +12,11 @@ import queue
 import threading
 import imageio
 from concurrent.futures import ThreadPoolExecutor
+import win32gui
+import win32ui
+import win32con
+import ctypes
+from ctypes import wintypes
 
 class ScreenRecorder:
     def __init__(self):
@@ -30,6 +35,11 @@ class ScreenRecorder:
         self.thread_pool = ThreadPoolExecutor(max_workers=max(4, cpu_count * 2))
         self.frame_cache = {}
         self.cache_size = 100
+        
+        self.use_gpu = cv2.cuda.getCudaEnabledDeviceCount() > 0
+        if self.use_gpu:
+            print("GPU acceleration enabled")
+            self.gpu_frame = cv2.cuda_GpuMat()
         
     def select_region(self):
         root = tk.Tk()
@@ -105,39 +115,65 @@ class ScreenRecorder:
         self.capture_thread.start()
         self.process_thread.start()
         
+    def _capture_frame_fast(self, region):
+        """Faster frame capture using win32gui"""
+        hwnd = win32gui.GetDesktopWindow()
+        width = region['width']
+        height = region['height']
+        
+        wDC = win32gui.GetWindowDC(hwnd)
+        dcObj = win32ui.CreateDCFromHandle(wDC)
+        cDC = dcObj.CreateCompatibleDC()
+        dataBitMap = win32ui.CreateBitmap()
+        dataBitMap.CreateCompatibleBitmap(dcObj, width, height)
+        cDC.SelectObject(dataBitMap)
+        cDC.BitBlt((0, 0), (width, height), dcObj, (region['left'], region['top']), win32con.SRCCOPY)
+        
+        signedIntsArray = dataBitMap.GetBitmapBits(True)
+        img = np.frombuffer(signedIntsArray, dtype='uint8')
+        img.shape = (height, width, 4)
+        
+        # Clean up
+        win32gui.DeleteObject(dataBitMap.GetHandle())
+        cDC.DeleteDC()
+        dcObj.DeleteDC()
+        win32gui.ReleaseDC(hwnd, wDC)
+        
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        
     def _capture_frames(self):
         print("Starting frame capture...")
         frame_time = 1 / self.fps
         next_frame_time = time.time()
         frames_captured = 0
         
-        # Create a new mss instance within this thread
-        with mss.mss() as sct:
-            while self.recording:
-                current_time = time.time()
-                
-                if current_time >= next_frame_time:
-                    try:
-                        frame = np.array(sct.grab(self.selected_region))
-                        
-                        if frame is not None and frame.size > 0:
-                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-                            frames_captured += 1
-                            print(f"Captured frame {frames_captured}")
+        while self.recording:
+            current_time = time.time()
+            
+            if current_time >= next_frame_time:
+                try:
+                    frame = self._capture_frame_fast(self.selected_region)
+                    
+                    if frame is not None and frame.size > 0:
+                        if self.use_gpu:
+                            self.gpu_frame.upload(frame)
+                            frame = self.gpu_frame.download()
                             
-                            try:
-                                self.frame_queue.put(frame, timeout=0.1)
-                            except queue.Full:
-                                print("Frame queue is full, dropping frame")
-                            except Exception as e:
-                                print(f"Error adding frame to queue: {str(e)}")
-                                
-                        next_frame_time = current_time + frame_time
-                    except Exception as e:
-                        print(f"Error capturing frame: {str(e)}")
-                        continue
+                        frames_captured += 1
                         
-                time.sleep(0.001)  # Reduced sleep time for better performance
+                        try:
+                            self.frame_queue.put(frame, timeout=0.1)
+                        except queue.Full:
+                            print("Frame queue is full, dropping frame")
+                        except Exception as e:
+                            print(f"Error adding frame to queue: {str(e)}")
+                            
+                    next_frame_time = current_time + frame_time
+                except Exception as e:
+                    print(f"Error capturing frame: {str(e)}")
+                    continue
+                    
+            time.sleep(0.001)
             
         print(f"Frame capture stopped. Total frames captured: {frames_captured}")
         
@@ -149,9 +185,13 @@ class ScreenRecorder:
                 
             try:
                 if quality == "low":
-                    frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
+                    frame = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
                 elif quality == "medium":
-                    frame = cv2.resize(frame, None, fx=0.75, fy=0.75)
+                    frame = cv2.resize(frame, None, fx=0.75, fy=0.75, interpolation=cv2.INTER_AREA)
+                    
+                if self.use_gpu:
+                    self.gpu_frame.upload(frame)
+                    frame = self.gpu_frame.download()
                     
                 processed_frames.append(frame)
             except Exception as e:
@@ -203,7 +243,6 @@ class ScreenRecorder:
         print("Stopping recording...")
         self.recording = False
         
-        # Wait for threads to finish
         if hasattr(self, 'capture_thread'):
             self.capture_thread.join()
         if hasattr(self, 'process_thread'):
@@ -242,7 +281,7 @@ class ScreenRecorder:
                 print(f"Error saving video: {str(e)}")
                 return None
             
-        else:  # GIF
+        else:  
             filename = f"recording_{timestamp}.gif"
             filepath = os.path.join(self.output_dir, filename)
             
@@ -252,11 +291,9 @@ class ScreenRecorder:
                 
                 for frame in self.processed_frames:
                     if frame is not None:
-                        # Convert BGR to RGB
                         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         img = Image.fromarray(frame_rgb)
                         
-                        # Apply quality settings
                         if self.quality == "low":
                             img = img.quantize(colors=64)
                         elif self.quality == "medium":
@@ -272,8 +309,7 @@ class ScreenRecorder:
                     print("No frames to save!")
                     return None
                 
-                # Save GIF with appropriate settings
-                duration = max(20, int(1000/self.fps))  # Minimum 20ms between frames
+                duration = max(20, int(1000/self.fps)) 
                 
                 print(f"Saving GIF with {len(pil_frames)} frames...")
                 pil_frames[0].save(
