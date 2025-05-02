@@ -8,6 +8,8 @@ from src.core.screen_recorder import ScreenRecorder
 from src.settings.settings_manager import SettingsManager
 from src.utils.uploader import MediaUploader
 from src.ui.ui import UI
+import threading
+import time
 
 class ScreenRecorderApp:
     """
@@ -40,22 +42,49 @@ class ScreenRecorderApp:
         self.ui.on_stop_recording = self._stop_recording
         self.ui.on_pause_recording = self._pause_recording
         self.ui.on_resume_recording = self._resume_recording
+        self._timer_thread = None
+        self._timer_running = False
+        self._last_frame_count = 0
 
     def _start_recording(self):
-        # Get format and quality from UI (to be added)
         format_type = self.ui.get_output_format()
         quality = self.ui.get_quality()
         fps = self.settings_manager.get_fps()
         self.recorder.start_recording(format_type=format_type, quality=quality, fps=fps)
+        self._start_timer()
 
     def _stop_recording(self):
+        self._stop_timer()
         return self.recorder.stop_recording()
 
     def _pause_recording(self):
         self.recorder.pause()
+        self._stop_timer()
 
     def _resume_recording(self):
         self.recorder.resume()
+        self._start_timer()
+
+    def _start_timer(self):
+        self._timer_running = True
+        self._timer_start_time = time.time()
+        self._last_frame_count = 0
+        self._timer_thread = threading.Thread(target=self._timer_loop, daemon=True)
+        self._timer_thread.start()
+
+    def _stop_timer(self):
+        self._timer_running = False
+
+    def _timer_loop(self):
+        while self._timer_running:
+            elapsed = int(time.time() - self._timer_start_time)
+            self.ui.update_elapsed_time(elapsed)
+            # FPS: use processed_frames length as a proxy
+            frame_count = len(self.recorder.processed_frames)
+            fps = frame_count - self._last_frame_count
+            self._last_frame_count = frame_count
+            self.ui.update_fps(fps)
+            time.sleep(1)
 
     def run(self):
         """

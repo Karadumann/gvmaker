@@ -80,3 +80,39 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request 
+
+## API Keys and Credentials Setup
+
+To upload to Google Drive, YouTube, or Dropbox with GV Maker, each user must add their own API credentials.
+
+### For Google Drive and YouTube (credentials.json)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and sign in with your Google account.
+2. Create a new project or select an existing one.
+3. In "APIs & Services" > "Library":
+   - Enable **Google Drive API** and **YouTube Data API v3**.
+4. Go to "APIs & Services" > "Credentials".
+5. Click "Create Credentials" > "OAuth client ID".
+   - Application type: Desktop app
+   - Give it a name and create.
+6. Download the generated `credentials.json` file.
+7. Place this file in the main application folder (the gvmaker directory).
+
+> **Note:** The first time you upload, you will be asked to sign in with your Google account. This is a one-time process; subsequent uploads will use the saved credentials.
+
+### For Dropbox Access Token
+
+1. Go to [Dropbox App Console](https://www.dropbox.com/developers/apps).
+2. Click "Create App" to make a new app.
+   - Choose "Scoped access" and either "Full dropbox" or "App folder".
+3. In the app settings, generate an access token.
+4. Enter this token in the app settings window (or paste it when prompted during your first upload).
+
+### Adding Credentials to the App
+
+- For Google Drive/YouTube: Place the `credentials.json` file in the main folder.
+- For Dropbox: Enter your access token in the app settings.
+
+---
+
+If you have any issues or need help with these steps, please contact us!

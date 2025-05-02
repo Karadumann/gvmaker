@@ -8,6 +8,8 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from typing import Dict, Any
 from .settings_manager import SettingsManager
+import os
+import webbrowser
 
 class SettingsDialog(tk.Toplevel):
     """
@@ -26,7 +28,7 @@ class SettingsDialog(tk.Toplevel):
         self.settings_manager = settings_manager
         
         self.title("Settings")
-        self.geometry("400x500")
+        self.geometry("400x700")
         self.resizable(False, False)
         
         self.setup_ui()
@@ -75,6 +77,48 @@ class SettingsDialog(tk.Toplevel):
             style="info.TButton"
         )
         browse_button.pack(pady=5)
+        
+        # Google credentials.json
+        cred_frame = ttk.LabelFrame(main_frame, text="Google Drive/YouTube credentials.json", padding="5")
+        cred_frame.pack(fill=X, pady=5)
+        cred_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+        self.cred_status_var = tk.StringVar()
+        if os.path.exists(cred_path):
+            self.cred_status_var.set("credentials.json is present.")
+        else:
+            self.cred_status_var.set("credentials.json is missing!")
+        cred_status_label = ttk.Label(cred_frame, textvariable=self.cred_status_var, style="info.TLabel")
+        cred_status_label.pack(fill=X, padx=5, pady=2)
+        cred_button = ttk.Button(
+            cred_frame,
+            text="Select credentials.json",
+            command=self._select_credentials,
+            style="info.TButton"
+        )
+        cred_button.pack(pady=5)
+
+        # Dropbox Access Token
+        dropbox_frame = ttk.LabelFrame(main_frame, text="Dropbox Access Token", padding="5")
+        dropbox_frame.pack(fill=X, pady=5)
+        self.dropbox_token_var = tk.StringVar(value=self._load_dropbox_token())
+        dropbox_entry = ttk.Entry(dropbox_frame, textvariable=self.dropbox_token_var, show="*")
+        dropbox_entry.pack(fill=X, padx=5, pady=5)
+        dropbox_save_button = ttk.Button(
+            dropbox_frame,
+            text="Save Token",
+            command=self._save_dropbox_token,
+            style="info.TButton"
+        )
+        dropbox_save_button.pack(pady=5)
+        
+        # API Guide Button
+        guide_button = ttk.Button(
+            main_frame,
+            text="API Guide",
+            command=self._show_api_guide,
+            style="secondary.TButton"
+        )
+        guide_button.pack(fill=X, pady=5)
         
         # Buttons
         button_frame = ttk.Frame(main_frame)
@@ -129,4 +173,95 @@ class SettingsDialog(tk.Toplevel):
         if len(api_key) < 10:
             tk.messagebox.showerror("API Key", "API key is too short!")
             return
-        tk.messagebox.showinfo("API Key", "API key format is valid.") 
+        tk.messagebox.showinfo("API Key", "API key format is valid.")
+
+    def _select_credentials(self):
+        from tkinter import filedialog, messagebox
+        import shutil, os
+        file_path = filedialog.askopenfilename(
+            title="Select credentials.json",
+            filetypes=[("JSON files", "*.json")]
+        )
+        if file_path:
+            dest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+            try:
+                shutil.copy(file_path, dest_path)
+                self.cred_status_var.set("credentials.json is present.")
+                messagebox.showinfo("Credentials", "credentials.json copied successfully.")
+            except Exception as e:
+                messagebox.showerror("Credentials", f"Failed to copy: {str(e)}")
+
+    def _load_dropbox_token(self):
+        import os
+        token_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "dropbox_token.txt")
+        if os.path.exists(token_path):
+            with open(token_path, "r") as f:
+                return f.read().strip()
+        return ""
+
+    def _save_dropbox_token(self):
+        from tkinter import messagebox
+        import os
+        token = self.dropbox_token_var.get().strip()
+        token_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "dropbox_token.txt")
+        try:
+            with open(token_path, "w") as f:
+                f.write(token)
+            messagebox.showinfo("Dropbox Token", "Token saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Dropbox Token", f"Failed to save token: {str(e)}")
+
+    def _show_api_guide(self):
+        guide_text = (
+            "How to get API credentials for Google Drive, YouTube, and Dropbox:\n\n"
+            "Google Drive & YouTube (credentials.json):\n"
+            "1. Go to https://console.cloud.google.com/ and sign in.\n"
+            "2. Create a new project or select an existing one.\n"
+            "3. In 'APIs & Services' > 'Library', enable both Google Drive API and YouTube Data API v3.\n"
+            "4. Go to 'APIs & Services' > 'Credentials'.\n"
+            "5. Click 'Create Credentials' > 'OAuth client ID'.\n"
+            "   - Application type: Desktop app\n"
+            "   - Give it a name and create.\n"
+            "6. Download the generated credentials.json file and place it in the main app folder.\n\n"
+            "Dropbox Access Token:\n"
+            "1. Go to https://www.dropbox.com/developers/apps.\n"
+            "2. Click 'Create App' to make a new app.\n"
+            "   - Choose 'Scoped access' and either 'Full dropbox' or 'App folder'.\n"
+            "3. In the app settings, generate an access token.\n"
+            "4. Enter this token in the app settings.\n"
+        )
+        # Create custom dialog
+        win = tk.Toplevel(self)
+        win.title("API Guide")
+        win.geometry("600x500")
+        win.resizable(True, True)
+        text = tk.Text(win, wrap="word", font=("Arial", 11), padx=10, pady=10)
+        text.insert("1.0", guide_text)
+        text.config(state="disabled", cursor="arrow", bg=win.cget("bg"))
+        text.pack(fill="both", expand=True)
+        # Make URLs clickable
+        def open_url(event, url):
+            webbrowser.open_new(url)
+        # Tag and bind Google Cloud link
+        start = guide_text.find("https://console.cloud.google.com/")
+        if start != -1:
+            end = start + len("https://console.cloud.google.com/")
+            text.config(state="normal")
+            text.tag_add("gcloud", f"1.{start}", f"1.{end}")
+            text.tag_config("gcloud", foreground="#1E90FF", underline=1)
+            text.tag_bind("gcloud", "<Button-1>", lambda e: open_url(e, "https://console.cloud.google.com/"))
+            text.config(state="disabled")
+        # Tag and bind Dropbox link
+        dropbox_line = guide_text.split("\n").index("Dropbox Access Token:")
+        dropbox_url = "https://www.dropbox.com/developers/apps"
+        dropbox_start = guide_text.find(dropbox_url)
+        if dropbox_start != -1:
+            dropbox_end = dropbox_start + len(dropbox_url)
+            text.config(state="normal")
+            text.tag_add("dropbox", f"1.{dropbox_start}", f"1.{dropbox_end}")
+            text.tag_config("dropbox", foreground="#1E90FF", underline=1)
+            text.tag_bind("dropbox", "<Button-1>", lambda e: open_url(e, dropbox_url))
+            text.config(state="disabled")
+        # Close button
+        close_btn = tk.Button(win, text="Close", command=win.destroy)
+        close_btn.pack(pady=8) 

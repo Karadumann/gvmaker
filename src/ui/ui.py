@@ -136,6 +136,13 @@ class UI:
             style="info.TLabel"
         )
         self.status_label.pack(pady=10)
+        # Elapsed time and FPS labels
+        self.time_fps_frame = ttk.Frame(self.main_frame)
+        self.time_fps_frame.pack(pady=2)
+        self.elapsed_time_label = ttk.Label(self.time_fps_frame, text="Elapsed: 00:00:00", style="info.TLabel")
+        self.elapsed_time_label.pack(side=LEFT, padx=5)
+        self.fps_label = ttk.Label(self.time_fps_frame, text="FPS: 0", style="info.TLabel")
+        self.fps_label.pack(side=LEFT, padx=5)
         
         # Recording path label (clickable)
         self.recording_path_label = ttk.Label(
@@ -169,10 +176,25 @@ class UI:
         self.upload_url_label.pack(pady=2)
         self.upload_url_label.bind("<Button-1>", self._on_open_upload_url)
         
+        # Platform selection for upload
+        self.platform_frame = ttk.Frame(self.main_frame)
+        self.platform_frame.pack(pady=2)
+        ttk.Label(self.platform_frame, text="Upload Platform:").pack(side=LEFT, padx=5)
+        self.platform_var = tk.StringVar(value="ImgBB")
+        self.platform_combo = ttk.Combobox(
+            self.platform_frame,
+            textvariable=self.platform_var,
+            values=["ImgBB", "YouTube", "Google Drive", "Dropbox"],
+            state="readonly",
+            width=12
+        )
+        self.platform_combo.pack(side=LEFT, padx=5)
+        
     def _on_start_recording(self):
         """Handle start recording button click."""
         if self.on_start_recording:
             try:
+                self._reset_time_fps()
                 self.on_start_recording()
                 self.start_button.configure(state=DISABLED)
                 self.stop_button.configure(state=NORMAL)
@@ -208,6 +230,7 @@ class UI:
                 self.stop_button.configure(state=DISABLED)
                 self.pause_button.configure(state=DISABLED)
                 self.pause_button.configure(text="Pause")
+                self._reset_time_fps()
         else:
             self.start_button.configure(state=NORMAL)
             self.stop_button.configure(state=DISABLED)
@@ -296,7 +319,8 @@ class UI:
         if not hasattr(self, 'last_recording_path') or not self.last_recording_path:
             mb.showwarning("Share Recording", "No recording to share!")
             return
-        url = self.uploader.upload_recording(self.last_recording_path)
+        platform = self.platform_var.get()
+        url = self.uploader.upload_recording(self.last_recording_path, platform=platform)
         if url:
             pyperclip.copy(url)
             self.upload_url_label.configure(text=url)
@@ -317,4 +341,17 @@ class UI:
     def _on_open_upload_url(self, event=None):
         import webbrowser
         if hasattr(self, '_last_upload_url') and self._last_upload_url:
-            webbrowser.open(self._last_upload_url) 
+            webbrowser.open(self._last_upload_url)
+
+    def _reset_time_fps(self):
+        self.elapsed_time_label.configure(text="Elapsed: 00:00:00")
+        self.fps_label.configure(text="FPS: 0")
+
+    def update_elapsed_time(self, seconds):
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        self.elapsed_time_label.configure(text=f"Elapsed: {h:02}:{m:02}:{s:02}")
+
+    def update_fps(self, fps):
+        self.fps_label.configure(text=f"FPS: {fps}") 
