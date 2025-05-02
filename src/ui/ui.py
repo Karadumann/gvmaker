@@ -14,6 +14,7 @@ from ..utils.uploader import MediaUploader
 from .api_key_dialog import APIKeyDialog
 from .about_dialog import AboutDialog
 import pyperclip
+from ..utils.notify import notify
 
 class UI:
     """
@@ -208,11 +209,13 @@ class UI:
         if self.on_stop_recording:
             try:
                 output_path = self.on_stop_recording()
+                notify("Recording Stopped", "Your screen recording has been saved.")
                 if output_path:
                     self.status_label.configure(text=f"Recording saved to:")
                     self.last_recording_path = output_path
                     self.recording_path_label.configure(text=output_path)
                     self.share_button.pack(pady=5)
+                    notify("Recording Saved", f"Saved to: {output_path}")
                 else:
                     self.status_label.configure(text="No frames were recorded!")
                     self.recording_path_label.configure(text="")
@@ -348,9 +351,11 @@ class UI:
             self.upload_url_label.configure(text=url)
             self._last_upload_url = url
             mb.showinfo("Share Recording", f"Upload successful!\nURL copied to clipboard.")
+            notify("Upload Successful", f"URL copied to clipboard:\n{url}")
         else:
             self.upload_url_label.configure(text="")
             mb.showerror("Share Recording", "Upload failed. Please check your API key and internet connection.")
+            notify("Upload Failed", "Could not upload. Please check your API key and internet connection.")
 
     def _on_open_recording_folder(self, event=None):
         import os

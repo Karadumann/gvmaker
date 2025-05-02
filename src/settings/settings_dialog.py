@@ -212,6 +212,8 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Dropbox Token", f"Failed to save token: {str(e)}")
 
     def _show_api_guide(self):
+        import webbrowser
+        import tkinter as tk
         guide_text = (
             "How to get API credentials for Google Drive, YouTube, and Dropbox:\n\n"
             "Google Drive & YouTube (credentials.json):\n"
@@ -230,38 +232,26 @@ class SettingsDialog(tk.Toplevel):
             "3. In the app settings, generate an access token.\n"
             "4. Enter this token in the app settings.\n"
         )
-        # Create custom dialog
         win = tk.Toplevel(self)
         win.title("API Guide")
         win.geometry("600x500")
-        win.resizable(True, True)
         text = tk.Text(win, wrap="word", font=("Arial", 11), padx=10, pady=10)
         text.insert("1.0", guide_text)
         text.config(state="disabled", cursor="arrow", bg=win.cget("bg"))
         text.pack(fill="both", expand=True)
-        # Make URLs clickable
-        def open_url(event, url):
-            webbrowser.open_new(url)
-        # Tag and bind Google Cloud link
-        start = guide_text.find("https://console.cloud.google.com/")
-        if start != -1:
-            end = start + len("https://console.cloud.google.com/")
-            text.config(state="normal")
-            text.tag_add("gcloud", f"1.{start}", f"1.{end}")
-            text.tag_config("gcloud", foreground="#1E90FF", underline=1)
-            text.tag_bind("gcloud", "<Button-1>", lambda e: open_url(e, "https://console.cloud.google.com/"))
-            text.config(state="disabled")
-        # Tag and bind Dropbox link
-        dropbox_line = guide_text.split("\n").index("Dropbox Access Token:")
-        dropbox_url = "https://www.dropbox.com/developers/apps"
-        dropbox_start = guide_text.find(dropbox_url)
-        if dropbox_start != -1:
-            dropbox_end = dropbox_start + len(dropbox_url)
-            text.config(state="normal")
-            text.tag_add("dropbox", f"1.{dropbox_start}", f"1.{dropbox_end}")
-            text.tag_config("dropbox", foreground="#1E90FF", underline=1)
-            text.tag_bind("dropbox", "<Button-1>", lambda e: open_url(e, dropbox_url))
-            text.config(state="disabled")
-        # Close button
+
+        def tag_url(url):
+            idx = text.search(url, "1.0", tk.END)
+            if idx:
+                end = f"{idx}+{len(url)}c"
+                text.config(state="normal")
+                text.tag_add(url, idx, end)
+                text.tag_config(url, foreground="#1E90FF", underline=1)
+                text.tag_bind(url, "<Button-1>", lambda e, u=url: webbrowser.open(u))
+                text.config(state="disabled")
+
+        tag_url("https://console.cloud.google.com/")
+        tag_url("https://www.dropbox.com/developers/apps")
+
         close_btn = tk.Button(win, text="Close", command=win.destroy)
         close_btn.pack(pady=8) 
