@@ -316,10 +316,32 @@ class UI:
 
     def _on_share_recording(self):
         import tkinter.messagebox as mb
+        import os
         if not hasattr(self, 'last_recording_path') or not self.last_recording_path:
             mb.showwarning("Share Recording", "No recording to share!")
             return
         platform = self.platform_var.get()
+        missing_api = False
+        missing_msg = ""
+        if platform == "YouTube":
+            if not os.path.exists("credentials.json"):
+                missing_api = True
+                missing_msg = "YouTube upload requires a Google credentials.json file."
+        elif platform == "Google Drive":
+            if not os.path.exists("credentials.json"):
+                missing_api = True
+                missing_msg = "Google Drive upload requires a Google credentials.json file."
+        elif platform == "Dropbox":
+            if not os.path.exists("dropbox_token.txt") or not open("dropbox_token.txt").read().strip():
+                missing_api = True
+                missing_msg = "Dropbox upload requires an access token."
+        if missing_api:
+            mb.showwarning("Missing API Credentials", missing_msg + "\nPlease add your credentials in Settings.")
+            from ..settings.settings_dialog import SettingsDialog
+            dialog = SettingsDialog(self.root, self.settings_manager)
+            self.root.after(100, lambda: dialog._show_api_guide())
+            dialog.show()
+            return
         url = self.uploader.upload_recording(self.last_recording_path, platform=platform)
         if url:
             pyperclip.copy(url)
