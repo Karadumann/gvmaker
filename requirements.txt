@@ -1,20 +1,28 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-python-multipart==0.0.6
+# Temel bağımlılıklar
+ttkbootstrap==1.10.1
 opencv-python-headless==4.8.1.78
 pillow==10.1.0
 numpy==1.26.2
 python-dotenv==1.0.0
 requests==2.31.0
-pynput==1.7.6
-screeninfo==0.8.1
+
+# Ekran kaydı için
 pyautogui==0.9.54
-pyperclip==1.8.2
+screeninfo==0.8.1
+
+# Klavye ve fare kontrolü için
+pynput==1.7.6
 keyboard==0.13.5
+
+# Medya işleme için
 moviepy==1.0.3
 sounddevice==0.4.6
 soundfile==0.12.1
-ttkbootstrap==1.10.1
+
+# Dağıtım için
 pyinstaller==6.1.0
 pywin32>=305
-opencv-contrib-python>=4.8.0 
+
+# Geliştirme araçları
+black==23.11.0
+pylint==3.0.2 

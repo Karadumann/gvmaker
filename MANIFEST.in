@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+include *.ico
+include *.spec
+include src/*.py
+include tests/*.py 
