@@ -61,9 +61,6 @@ gvmaker
 - **Share Recording:** Uploads to ImgBB, copies URL to clipboard, and shows a clickable link.
 - **Compact UI:** No unnecessary empty space.
 
-## Screenshot
-
-*(Add a screenshot of the main UI here)*
 
 ## Troubleshooting
 
