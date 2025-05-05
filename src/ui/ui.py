@@ -280,11 +280,16 @@ class UI:
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self.show_about)
+        help_menu.add_command(label="Send Feedback", command=self.show_feedback)
         
     def show_about(self):
         """Show about dialog."""
         AboutDialog(self.root)
-        
+
+    def show_feedback(self):
+        from .feedback_dialog import FeedbackDialog
+        FeedbackDialog(self.root)
+
     def open_recordings_folder(self):
         """Open the recordings folder."""
         import os

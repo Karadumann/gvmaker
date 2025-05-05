@@ -10,6 +10,9 @@ from src.utils.uploader import MediaUploader
 from src.ui.ui import UI
 import threading
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class ScreenRecorderApp:
     """

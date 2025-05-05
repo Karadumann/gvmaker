@@ -8,7 +8,7 @@ def notify(title: str, message: str):
             toaster.show_toast(title, message, duration=5, threaded=True, icon_path=None)
             return
         except Exception:
-            pass  
+            pass
     try:
         from plyer import notification
         notification.notify(
