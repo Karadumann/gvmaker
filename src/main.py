@@ -11,6 +11,7 @@ from src.ui.ui import UI
 import threading
 import time
 from dotenv import load_dotenv
+from src.utils.update_checker import prompt_update_if_available
 
 load_dotenv()
 
@@ -99,6 +100,7 @@ def main():
     """
     Application entry point.
     """
+    prompt_update_if_available()
     app = ScreenRecorderApp()
     app.run()
 

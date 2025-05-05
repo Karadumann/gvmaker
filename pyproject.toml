@@ -23,3 +23,9 @@ disable = [
     "W0621",  # redefined-outer-name
     "R0903",  # too-few-public-methods
 ] 
+
+[tool.semantic_release]
+version_variable = ["src/__init__.py:__version__"]
+branch = "main"
+upload_to_pypi = false
+changelog_file = "CHANGELOG.md"
