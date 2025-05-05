@@ -1,91 +1,55 @@
-# Contributing to GV Maker
+# Contributing to GVMaker
 
-Thank you for your interest in contributing to GV Maker! This document provides guidelines and instructions for contributing to the project.
-
-## Code of Conduct
-
-By participating in this project, you agree to abide by our Code of Conduct.
+Thank you for considering contributing to GVMaker! We welcome all kinds of contributions, including bug reports, feature requests, documentation improvements, and code.
 
 ## How to Contribute
 
-1. Fork the repository
-2. Create a new branch for your feature or bugfix
-3. Make your changes
-4. Write tests for your changes
-5. Ensure all tests pass
-6. Submit a pull request
+### 1. Fork the Repository
+Click the "Fork" button at the top right of this page to create your own copy of the repository.
 
-## Development Setup
-
-1. Clone your fork:
+### 2. Clone Your Fork
 ```bash
 git clone https://github.com/your-username/gvmaker.git
 cd gvmaker
 ```
 
-2. Create a virtual environment:
+### 3. Create a Branch
+Create a new branch for your feature or bugfix:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+git checkout -b feature/your-feature-name
 ```
 
-3. Install development dependencies:
-```bash
-pip install -e ".[dev]"
-```
+### 4. Make Your Changes
+Make your changes, and ensure your code follows our style guidelines.
 
-4. Install pre-commit hooks:
-```bash
-pre-commit install
-```
-
-## Code Style
-
-We use the following tools to maintain code quality:
-
-- Black for code formatting
-- isort for import sorting
-- flake8 for linting
-- pylint for static analysis
-
-Run these tools before submitting a pull request:
-
-```bash
-black .
-isort .
-flake8
-pylint src tests
-```
-
-## Testing
-
-We use pytest for testing. Run the tests with:
-
+### 5. Test Your Changes
+Run the tests to make sure everything works:
 ```bash
 pytest
 ```
 
-## Documentation
+### 6. Commit and Push
+```bash
+git add .
+git commit -m "Describe your changes"
+git push origin feature/your-feature-name
+```
 
-- Use docstrings for all public functions and classes
-- Follow Google style for docstrings
-- Update README.md for significant changes
-- Add comments for complex logic
+### 7. Open a Pull Request
+Go to the repository on GitHub and open a Pull Request from your branch.
 
-## Pull Request Process
+## Code Style
 
-1. Update the README.md with details of changes if needed
-2. Update the CHANGELOG.md with a summary of changes
-3. The PR must pass all CI checks
-4. The PR must be reviewed by at least one maintainer
+- Follow PEP8 guidelines.
+- Use descriptive commit messages.
+- Write docstrings for new functions and classes.
 
-## Release Process
+## Reporting Issues
 
-1. Update version in setup.py
-2. Update CHANGELOG.md
-3. Create a new release on GitHub
-4. Build and upload to PyPI
+If you find a bug or have a feature request, please open an issue using the [issue template](./ISSUE_TEMPLATE.md).
 
-## Questions?
+## Code of Conduct
 
-Feel free to open an issue if you have any questions about contributing. 
+Please read our [Code of Conduct](./CODE_OF_CONDUCT.md) before contributing.
+
+Thank you for helping make GVMaker better! 

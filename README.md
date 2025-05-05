@@ -75,11 +75,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request 
+We welcome contributions from the community! Please read our [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines on how to contribute, including code style, testing, and submitting pull requests.
+
+Before contributing, please also review our [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## Reporting Issues & Feature Requests
+
+If you encounter a bug or have a feature suggestion, please use the GitHub Issues tab. We provide templates for both bug reports and feature requests to help you provide all necessary information:
+- [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md)
+- [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md)
+
+## Community & Roadmap
+
+We use GitHub Projects to organize our roadmap and ongoing work. Check the Projects tab to see what's planned and in progress.
 
 ## API Keys and Credentials Setup
 
