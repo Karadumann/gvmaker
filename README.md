@@ -124,3 +124,13 @@ To upload to Google Drive, YouTube, or Dropbox with GV Maker, each user must add
 ---
 
 If you have any issues or need help with these steps, please contact us!
+
+## Contributors
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+This project follows the [all-contributors](https://allcontributors.org) specification. Contributions of any kind are welcome!
+
+![Contributors](https://img.shields.io/github/contributors/Karadumann/gvmaker)
+![Pull Requests](https://img.shields.io/github/issues-pr/Karadumann/gvmaker)
+![Issues](https://img.shields.io/github/issues/Karadumann/gvmaker)
