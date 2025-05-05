@@ -28,4 +28,5 @@ google-auth-oauthlib
 dropbox
 plyer
 
-win10toast 
+win10toast
+pystray 
