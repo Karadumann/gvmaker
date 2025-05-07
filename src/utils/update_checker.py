@@ -4,7 +4,7 @@ import os
 import sys
 import threading
 from packaging import version
-from src import __version__
+from src.version import __version__
 
 GITHUB_REPO = "Karadumann/gvmaker"
 
